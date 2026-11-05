@@ -1,0 +1,244 @@
+openapi: 3.0.3
+info:
+  title: Bookstore API
+  version: 2.1.0
+  description: |
+    Browse the catalogue, manage your cart and place orders.
+
+    ## Getting started
+    1. Create an account with `POST /auth/register`.
+    2. Exchange your credentials for a token with `POST /auth/login`.
+    3. Send the token as `Authorization: Bearer <token>` on every other request.
+
+    > Prices are always in **cents** (integer) to avoid rounding errors.
+servers:
+  - url: https://api.bookstore.example.com/v2
+    description: Production
+  - url: https://sandbox.bookstore.example.com/v2
+    description: Sandbox (no real orders)
+tags:
+  - name: Auth
+    description: Sign up and sign in.
+  - name: Books
+    description: The catalogue.
+  - name: Orders
+    description: Place and track orders.
+security:
+  - bearerAuth: []
+paths:
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Register an account
+      operationId: register
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Credentials' }
+      responses:
+        '201':
+          description: Account created.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '409':
+          $ref: '#/components/responses/Error'
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Sign in
+      description: Returns a token valid for **24 hours**.
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Credentials' }
+      responses:
+        '200':
+          description: Signed in.
+          content:
+            application/json:
+              example: { token: eyJhbGciOiJIUzI1NiJ9.example, expiresIn: 86400 }
+        '401':
+          $ref: '#/components/responses/Error'
+  /books:
+    get:
+      tags: [Books]
+      summary: Search books
+      operationId: listBooks
+      parameters:
+        - { name: q, in: query, description: Free-text search over title and author., schema: { type: string }, example: dune }
+        - { name: genre, in: query, schema: { $ref: '#/components/schemas/Genre' } }
+        - { name: maxPrice, in: query, description: Maximum price in cents., schema: { type: integer, minimum: 0 } }
+        - { name: page, in: query, schema: { type: integer, default: 1 } }
+      responses:
+        '200':
+          description: A page of books.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/Book' } }
+                  total: { type: integer, example: 128 }
+    post:
+      tags: [Books]
+      summary: Add a book
+      description: Staff only.
+      operationId: createBook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BookInput' }
+      responses:
+        '201':
+          description: Book created.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Book' }
+        '403':
+          $ref: '#/components/responses/Error'
+  /books/{isbn}:
+    parameters:
+      - { name: isbn, in: path, required: true, description: ISBN-13 without dashes., schema: { type: string, example: '9780441013593' } }
+    get:
+      tags: [Books]
+      summary: Get a book
+      operationId: getBook
+      responses:
+        '200':
+          description: The book.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Book' }
+        '404':
+          $ref: '#/components/responses/Error'
+    patch:
+      tags: [Books]
+      summary: Update a book
+      description: Send only the fields you want to change.
+      operationId: updateBook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                price: { type: integer, example: 1499 }
+                stock: { type: integer, example: 12 }
+      responses:
+        '200':
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Book' }
+    delete:
+      tags: [Books]
+      summary: Remove a book
+      operationId: deleteBook
+      deprecated: true
+      responses:
+        '204': { description: Removed. }
+  /orders:
+    post:
+      tags: [Orders]
+      summary: Place an order
+      operationId: createOrder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OrderInput' }
+      responses:
+        '201':
+          description: Order placed.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Order' }
+        '422':
+          $ref: '#/components/responses/Error'
+  /orders/{id}:
+    get:
+      tags: [Orders]
+      summary: Track an order
+      operationId: getOrder
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: The order.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Order' }
+        '404':
+          $ref: '#/components/responses/Error'
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+  schemas:
+    Genre: { type: string, enum: [fiction, science, history, children] }
+    Credentials:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, format: password, minLength: 8 }
+    User:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        createdAt: { type: string, format: date-time }
+    BookInput:
+      type: object
+      required: [isbn, title, author, price]
+      properties:
+        isbn: { type: string, example: '9780441013593' }
+        title: { type: string, example: Dune }
+        author: { type: string, example: Frank Herbert }
+        genre: { $ref: '#/components/schemas/Genre' }
+        price: { type: integer, description: Price in cents., example: 1299 }
+        stock: { type: integer, example: 25 }
+    Book:
+      allOf:
+        - $ref: '#/components/schemas/BookInput'
+        - type: object
+          properties:
+            rating: { type: number, example: 4.6 }
+    OrderInput:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [isbn, quantity]
+            properties:
+              isbn: { type: string, example: '9780441013593' }
+              quantity: { type: integer, minimum: 1, example: 2 }
+        shippingAddress: { type: string, example: '1 Main St, Springfield' }
+    Order:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string, enum: [pending, paid, shipped, delivered, cancelled], example: paid }
+        totalCents: { type: integer, example: 2598 }
+        createdAt: { type: string, format: date-time }
+    Problem:
+      type: object
+      properties:
+        code: { type: string, example: not_found }
+        message: { type: string, example: Book not found. }
+  responses:
+    Error:
+      description: Something went wrong.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Problem' }

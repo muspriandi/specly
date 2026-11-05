@@ -1,0 +1,39 @@
+<%- include('partials/head', { wide: true }) %>
+<div class="flex flex-wrap items-end justify-between gap-3">
+  <div>
+    <h1 class="text-2xl font-bold">API Documentation</h1>
+    <% if (user.role === 'member') { %><p class="mt-1 text-sm text-slate-600 dark:text-slate-400">You can read the blueprints assigned to you. Request access to any other one and an admin will review it.</p>
+    <% } else if (user.role === 'guest') { %><p class="mt-1 text-sm text-slate-600 dark:text-slate-400">You're signed in as a guest. You can read the blueprints an admin has assigned to you.</p><% } %>
+  </div>
+  <% if (blueprints.length > 1) { %>
+  <div class="flex flex-wrap items-center gap-2" role="group" aria-label="Filter blueprints">
+    <input type="search" id="bp-filter" placeholder="Filter blueprints…" aria-label="Filter blueprints" class="field !mt-0 !w-48">
+    <% if (blueprints.some(function (b) { return b.access !== 'granted'; })) { %>
+    <button type="button" class="badge badge-neutral cursor-pointer aria-pressed:border-brand-600 aria-pressed:bg-brand-50 aria-pressed:text-brand-700 dark:aria-pressed:bg-slate-800 dark:aria-pressed:text-brand-400" id="bp-mine" aria-pressed="false">Only mine</button>
+    <% } %>
+  </div>
+  <% } %>
+</div>
+<% if (user.role === 'member' && blueprints.length && !blueprints.some(function (b) { return b.access === 'granted'; })) { %>
+  <section class="card mt-4" aria-labelledby="how-access">
+    <h2 id="how-access" class="font-semibold">How access works</h2>
+    <ol class="mt-3 grid gap-4 text-sm text-slate-600 dark:text-slate-400 sm:grid-cols-3">
+      <li class="flex gap-3"><span class="grid size-6 shrink-0 place-items-center rounded-full bg-brand-600 text-xs font-bold text-white" aria-hidden="true">1</span><span><strong class="text-slate-900 dark:text-slate-100">Pick a blueprint.</strong> Cards marked “Access required” are locked for you.</span></li>
+      <li class="flex gap-3"><span class="grid size-6 shrink-0 place-items-center rounded-full bg-brand-600 text-xs font-bold text-white" aria-hidden="true">2</span><span><strong class="text-slate-900 dark:text-slate-100">Request access.</strong> Say briefly why you need it. This helps the admin decide.</span></li>
+      <li class="flex gap-3"><span class="grid size-6 shrink-0 place-items-center rounded-full bg-brand-600 text-xs font-bold text-white" aria-hidden="true">3</span><span><strong class="text-slate-900 dark:text-slate-100">Wait for approval.</strong> Once approved, the card opens the docs. Pending requests are marked on the card.</span></li>
+    </ol>
+  </section>
+<% } %>
+<% if (!blueprints.length) { %>
+  <div class="card mt-4 !p-0"><div class="empty">
+    <%- icon('inbox', 'size-8') %>
+    <% if (user.role === 'admin') { %><p>No blueprints yet. Upload an OpenAPI or Swagger file to publish your first API.</p><a class="btn" href="/manage/blueprints/new">Add the first blueprint</a>
+    <% } else { %><p><%= user.role === 'guest' ? 'No blueprints have been assigned to you yet. Ask an admin to assign one.' : 'No blueprints have been shared with you yet. Ask an admin to publish one.' %></p><% } %>
+  </div></div>
+<% } %>
+<div class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" id="bp-grid">
+  <% blueprints.forEach(function (b) { %><div data-bp="<%= (b.title + ' ' + (b.description || '')).toLowerCase().slice(0, 300) %>" data-granted="<%= b.access === 'granted' %>" class="contents"><%- include('partials/bp-card', { b }) %></div><% }) %>
+</div>
+<p id="bp-none" class="card mt-4 hidden text-sm text-slate-600 dark:text-slate-400">No blueprints match your filter.</p>
+<script src="/static/home.js"></script>
+<%- include('partials/foot') %>

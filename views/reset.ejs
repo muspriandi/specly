@@ -1,0 +1,11 @@
+<%- include('partials/head') %>
+<div class="card mx-auto mt-10 max-w-sm sm:mt-20">
+  <h1 class="mb-4 text-xl font-bold">Set a new password</h1>
+  <% if (typeof error !== 'undefined') { %><div class="alert-error"><%= error %></div><% } %>
+  <form method="post"><%- include('partials/csrf') %>
+    <label class="label">New password <input class="field" type="password" name="password" minlength="8" required autofocus autocomplete="new-password" aria-describedby="pw-hint"><span class="hint" id="pw-hint">At least 8 characters.</span></label>
+    <label class="label">Confirm password <input class="field" type="password" name="confirm" minlength="8" required autocomplete="new-password"></label>
+    <button class="btn w-full">Update password</button>
+  </form>
+</div>
+<%- include('partials/foot') %>

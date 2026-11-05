@@ -1,0 +1,47 @@
+<%- include('../partials/head') %>
+<h1 class="text-2xl font-bold">Trash</h1>
+<p class="mb-4 mt-1 text-sm text-slate-600 dark:text-slate-400">Deleted blueprints and users are hidden from everyone but kept here, with their history, until you restore or permanently delete them.</p>
+
+<h2 class="mb-3 mt-6 text-lg font-semibold">Blueprints</h2>
+<% if (!blueprints.length) { %><div class="card !p-0"><div class="empty"><p>No deleted blueprints.</p></div></div><% } else { %>
+<div class="card overflow-x-auto !p-0">
+<table class="w-full text-sm">
+  <caption class="sr-only">Deleted blueprints</caption>
+  <thead class="border-b border-slate-200 dark:border-slate-800"><tr><th scope="col" class="th">Title</th><th scope="col" class="th">Version</th><th scope="col" class="th">Contents</th><th scope="col" class="th">Deleted</th><th scope="col" class="th"><span class="sr-only">Actions</span></th></tr></thead>
+  <% blueprints.forEach(function (b) { %>
+  <tr class="tr">
+    <td class="td font-medium"><%= b.title %></td>
+    <td class="td"><%= b.version || '—' %></td>
+    <td class="td text-xs text-slate-600 dark:text-slate-400"><%= b.endpoint_count %> endpoints · <%= b.revisions %> revision<%= b.revisions === 1 ? '' : 's' %></td>
+    <td class="td text-xs text-slate-600 dark:text-slate-400"><%= fmt(b.deleted_at) %></td>
+    <td class="td"><div class="flex items-center justify-end gap-3">
+      <form method="post" action="/manage/trash/blueprints/<%= b.id %>/restore"><%- include('../partials/csrf') %><button class="link">Restore</button></form>
+      <form method="post" action="/manage/trash/blueprints/<%= b.id %>/purge" data-confirm="“<%= b.title %>”, its history and all access requests will be gone for good. This cannot be undone." data-confirm-title="Delete forever?" data-confirm-action="Delete forever"><%- include('../partials/csrf') %><button class="link-danger">Delete forever</button></form>
+    </div></td>
+  </tr>
+  <% }) %>
+</table></div>
+<%- include('../partials/pager', { pg: bp }) %>
+<% } %>
+
+<h2 class="mb-3 mt-8 text-lg font-semibold">Users</h2>
+<% if (!users.length) { %><div class="card !p-0"><div class="empty"><p>No deleted users.</p></div></div><% } else { %>
+<div class="card overflow-x-auto !p-0">
+<table class="w-full text-sm">
+  <caption class="sr-only">Deleted users</caption>
+  <thead class="border-b border-slate-200 dark:border-slate-800"><tr><th scope="col" class="th">Name</th><th scope="col" class="th">Email</th><th scope="col" class="th">Role</th><th scope="col" class="th">Deleted</th><th scope="col" class="th"><span class="sr-only">Actions</span></th></tr></thead>
+  <% users.forEach(function (u) { %>
+  <tr class="tr">
+    <td class="td font-medium"><%= u.name %></td><td class="td"><%= u.email %></td>
+    <td class="td"><span class="badge badge-neutral"><%= u.role %></span></td>
+    <td class="td text-xs text-slate-600 dark:text-slate-400"><%= fmt(u.deleted_at) %></td>
+    <td class="td"><div class="flex items-center justify-end gap-3">
+      <form method="post" action="/manage/trash/users/<%= u.id %>/restore"><%- include('../partials/csrf') %><button class="link">Restore</button></form>
+      <form method="post" action="/manage/trash/users/<%= u.id %>/purge" data-confirm="<%= u.name %> (<%= u.email %>) will be gone for good. This cannot be undone." data-confirm-title="Delete forever?" data-confirm-action="Delete forever"><%- include('../partials/csrf') %><button class="link-danger">Delete forever</button></form>
+    </div></td>
+  </tr>
+  <% }) %>
+</table></div>
+<%- include('../partials/pager', { pg: up }) %>
+<% } %>
+<%- include('../partials/foot') %>

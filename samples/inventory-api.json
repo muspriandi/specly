@@ -1,0 +1,97 @@
+{
+  "swagger": "2.0",
+  "info": { "title": "Inventory API (legacy)", "version": "1.0.7", "description": "Warehouse stock levels. This service still uses **Swagger 2.0**." },
+  "host": "inventory.example.com",
+  "basePath": "/api",
+  "schemes": ["https"],
+  "consumes": ["application/json"],
+  "produces": ["application/json"],
+  "securityDefinitions": { "basicAuth": { "type": "basic" } },
+  "security": [{ "basicAuth": [] }],
+  "tags": [{ "name": "Items", "description": "Stock keeping units." }, { "name": "Warehouses" }],
+  "paths": {
+    "/items": {
+      "get": {
+        "tags": ["Items"],
+        "summary": "List items",
+        "operationId": "listItems",
+        "parameters": [
+          { "name": "warehouse", "in": "query", "type": "string", "description": "Filter by warehouse code.", "x-example": "JKT-01" },
+          { "name": "lowStock", "in": "query", "type": "boolean", "description": "Only items below their reorder level." }
+        ],
+        "responses": { "200": { "description": "Items.", "schema": { "type": "array", "items": { "$ref": "#/definitions/Item" } } } }
+      },
+      "post": {
+        "tags": ["Items"],
+        "summary": "Create an item",
+        "operationId": "createItem",
+        "parameters": [{ "in": "body", "name": "body", "required": true, "schema": { "$ref": "#/definitions/Item" } }],
+        "responses": { "201": { "description": "Created.", "schema": { "$ref": "#/definitions/Item" } }, "400": { "description": "Invalid item." } }
+      }
+    },
+    "/items/{sku}": {
+      "parameters": [{ "name": "sku", "in": "path", "required": true, "type": "string", "description": "Stock keeping unit.", "x-example": "SKU-1001" }],
+      "get": {
+        "tags": ["Items"],
+        "summary": "Get an item",
+        "operationId": "getItem",
+        "responses": { "200": { "description": "The item.", "schema": { "$ref": "#/definitions/Item" } }, "404": { "description": "Unknown SKU." } }
+      },
+      "put": {
+        "tags": ["Items"],
+        "summary": "Replace an item",
+        "operationId": "replaceItem",
+        "parameters": [{ "in": "body", "name": "body", "required": true, "schema": { "$ref": "#/definitions/Item" } }],
+        "responses": { "200": { "description": "Updated.", "schema": { "$ref": "#/definitions/Item" } } }
+      },
+      "delete": {
+        "tags": ["Items"],
+        "summary": "Delete an item",
+        "operationId": "deleteItem",
+        "responses": { "204": { "description": "Deleted." } }
+      }
+    },
+    "/items/{sku}/adjust": {
+      "post": {
+        "tags": ["Items"],
+        "summary": "Adjust stock level",
+        "description": "Use a **negative** delta to remove stock.",
+        "operationId": "adjustStock",
+        "parameters": [
+          { "name": "sku", "in": "path", "required": true, "type": "string", "x-example": "SKU-1001" },
+          { "in": "body", "name": "body", "required": true, "schema": { "type": "object", "required": ["delta"], "properties": { "delta": { "type": "integer", "example": -3 }, "reason": { "type": "string", "example": "Damaged in transit" } } } }
+        ],
+        "responses": { "200": { "description": "New stock level.", "schema": { "$ref": "#/definitions/Item" } } }
+      }
+    },
+    "/warehouses": {
+      "get": {
+        "tags": ["Warehouses"],
+        "summary": "List warehouses",
+        "operationId": "listWarehouses",
+        "responses": { "200": { "description": "Warehouses.", "schema": { "type": "array", "items": { "$ref": "#/definitions/Warehouse" } } } }
+      }
+    }
+  },
+  "definitions": {
+    "Item": {
+      "type": "object",
+      "required": ["sku", "name"],
+      "properties": {
+        "sku": { "type": "string", "example": "SKU-1001" },
+        "name": { "type": "string", "example": "Wireless mouse" },
+        "quantity": { "type": "integer", "example": 120 },
+        "reorderLevel": { "type": "integer", "example": 20 },
+        "warehouse": { "type": "string", "example": "JKT-01" }
+      }
+    },
+    "Warehouse": {
+      "type": "object",
+      "properties": {
+        "code": { "type": "string", "example": "JKT-01" },
+        "city": { "type": "string", "example": "Jakarta" },
+        "capacity": { "type": "integer", "example": 50000 }
+      }
+    }
+  }
+}

@@ -1,0 +1,57 @@
+<%- include('../partials/head') %>
+<nav aria-label="Breadcrumb" class="mb-3 flex items-center gap-2 text-sm"><a class="link" href="/manage/blueprints">Blueprints</a><span class="text-slate-400" aria-hidden="true">/</span><span class="min-w-0 truncate font-medium" title="<%= bp.title %>"><%= bp.title %></span></nav>
+<h1 class="text-2xl font-bold">Who can read this blueprint</h1>
+<p class="mb-4 mt-1 text-sm text-slate-600 dark:text-slate-400">Admins can read every blueprint. Members and guests can read it only when it is assigned to them here (or, for members, after an approved request).</p>
+<div class="grid items-start gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+  <section aria-labelledby="readers-h" class="min-w-0">
+    <h2 id="readers-h" class="mb-2 font-semibold">Assigned <span class="text-sm font-normal text-slate-600 dark:text-slate-400">(<%= pg.total %><%= filter || role ? ' matching' : '' %>)</span></h2>
+    <%- include('../partials/list-search', { placeholder: 'Search by name or email', filter: filter, selects: [
+      { name: 'role', label: 'Filter by role', value: role, options: [['', 'All roles'], ['member', 'Member'], ['guest', 'Guest']] } ] }) %>
+    <% if (readers.length) { %>
+    <form id="bulk" method="post" action="/manage/blueprints/<%= bp.id %>/access/revoke" class="mb-3 flex flex-wrap items-center gap-2" data-confirm="The selected users will no longer be able to read “<%= bp.title %>”." data-confirm-title="Remove access for the selected users?" data-confirm-action="Un-assign"><%- include('../partials/csrf') %>
+      <span class="text-sm text-slate-600 dark:text-slate-400" data-bulk-count aria-live="polite">0 selected</span>
+      <button class="btn btn-sm btn-danger" data-bulk-btn disabled>Un-assign selected</button>
+    </form>
+    <% } %>
+    <div class="card overflow-x-auto !p-0">
+      <% if (!readers.length) { %><div class="empty"><p><%= filter || role ? 'No assigned users match these filters.' : 'No members or guests can read this blueprint yet.' %></p></div><% } else { %>
+      <table class="w-full text-sm">
+        <caption class="sr-only">Users who can read <%= bp.title %></caption>
+        <thead class="border-b border-slate-200 dark:border-slate-800"><tr><th scope="col" class="th w-10"><input type="checkbox" class="size-4 accent-brand-600" data-bulk-all aria-label="Select all users on this page"></th><th scope="col" class="th">User</th><th scope="col" class="th">Role</th><th scope="col" class="th">Since</th><th scope="col" class="th"><span class="sr-only">Actions</span></th></tr></thead>
+        <% readers.forEach(function (r) { %>
+        <tr class="tr <%= r.active ? '' : 'opacity-60' %>">
+          <td class="td"><input type="checkbox" class="size-4 accent-brand-600" name="users" value="<%= r.id %>" form="bulk" data-bulk-row aria-label="Select <%= r.name %>"></td>
+          <td class="td"><div class="clip font-medium" title="<%= r.name %>"><%= r.name %></div><div class="clip text-xs text-slate-600 dark:text-slate-400" title="<%= r.email %>"><%= r.email %></div></td>
+          <td class="td"><span class="badge <%= r.role === 'member' ? 'badge-ok' : 'badge-neutral' %>"><%= r.role %></span><% if (!r.active) { %> <span class="badge badge-bad">Disabled</span><% } %></td>
+          <td class="td text-xs text-slate-600 dark:text-slate-400"><%= r.decided_at ? fmt(r.decided_at) : '—' %></td>
+          <td class="td"><form method="post" action="/manage/blueprints/<%= bp.id %>/access/<%= r.id %>/revoke" class="text-right" data-confirm="<%= r.name %> (<%= r.email %>) will no longer be able to read “<%= bp.title %>”." data-confirm-title="Remove this user's access?" data-confirm-action="Un-assign"><%- include('../partials/csrf') %><button class="link-danger">Un-assign</button></form></td>
+        </tr>
+        <% }) %>
+      </table>
+      <% } %>
+    </div>
+    <%- include('../partials/pager', { pg: pg }) %>
+  </section>
+  <section aria-labelledby="assign-h" class="card min-w-0">
+    <h2 id="assign-h" class="font-semibold">Assign users</h2>
+    <% if (!candidates.length) { %><p class="mt-2 text-sm text-slate-600 dark:text-slate-400">Every active member and guest already has access. <a class="link" href="/manage/users/new">Add a user</a>.</p>
+    <% } else { %>
+    <form method="post" action="/manage/blueprints/<%= bp.id %>/access" class="mt-2"><%- include('../partials/csrf') %>
+      <input type="search" id="cand-filter" placeholder="Filter users…" aria-label="Filter users" class="field !mt-0 mb-2">
+      <div class="max-h-72 space-y-1 overflow-auto rounded-lg border border-slate-300 p-2 dark:border-slate-700">
+        <% candidates.forEach(function (c) { %>
+        <label data-cand="<%= (c.name + ' ' + c.email).toLowerCase() %>" class="flex items-center gap-2 rounded px-2 py-1 text-sm hover:bg-slate-100 dark:hover:bg-slate-800">
+          <input type="checkbox" name="users" value="<%= c.id %>" class="size-4 shrink-0 accent-brand-600">
+          <span class="min-w-0 flex-1"><span class="clip block font-medium"><%= c.name %></span><span class="clip block text-xs text-slate-600 dark:text-slate-400"><%= c.email %></span></span>
+          <% if (c.requested) { %><span class="badge badge-warn shrink-0">Requested</span><% } %><span class="badge <%= c.role === 'member' ? 'badge-ok' : 'badge-neutral' %> shrink-0"><%= c.role %></span>
+        </label>
+        <% }) %>
+      </div>
+      <% if (candidates.length === 500) { %><p class="hint mt-1">Showing the first 500 users. Use the filter above.</p><% } %>
+      <button class="btn mt-3">Assign selected</button>
+    </form>
+    <% } %>
+  </section>
+</div>
+<script src="/static/access-filter.js"></script>
+<%- include('../partials/foot') %>

@@ -1,0 +1,38 @@
+<%- include('../partials/head') %>
+<div class="mb-4 flex flex-wrap items-center justify-between gap-2">
+  <div>
+    <a class="link" href="/manage/blueprints">← Blueprints</a>
+    <h1 class="mt-1 text-2xl font-bold">History: <%= bp.title %></h1>
+  </div>
+  <a class="btn btn-ghost" href="/manage/blueprints/<%= bp.id %>/edit">Upload a new version</a>
+</div>
+<div class="card overflow-x-auto !p-0">
+<table class="w-full text-sm">
+  <thead class="border-b border-slate-200 dark:border-slate-800"><tr><th scope="col" class="th">Revision</th><th scope="col" class="th">Saved</th><th scope="col" class="th">By</th><th scope="col" class="th">Note</th><th scope="col" class="th">Endpoint changes</th><th scope="col" class="th"></th></tr></thead>
+  <% versions.forEach(function (v, i) { %>
+  <tr class="tr align-top">
+    <td class="td font-semibold">Rev <%= v.version_no %>
+      <% if (i === 0) { %><span class="badge badge-ok ml-1">current</span><% } %>
+      <div class="text-xs font-normal text-slate-600 dark:text-slate-400"><%= v.title %><% if (v.version) { %> · <%= v.version %><% } %> · <%= v.format.toUpperCase() %></div>
+    </td>
+    <td class="td text-xs text-slate-600 dark:text-slate-400"><%= fmt(v.created_at) %></td>
+    <td class="td"><span class="clip" title="<%= (v.author || '—') %>"><%= (v.author || '—') %></span></td>
+    <td class="td"><span class="clip !max-w-xs" title="<%= (v.note || '—') %>"><%= (v.note || '—') %></span></td>
+    <td class="td text-xs">
+      <% var d = v.diff; if (!d.added.length && !d.removed.length && !d.changed.length) { %><span class="text-slate-600 dark:text-slate-400">No endpoint changes</span><% } %>
+      <% d.added.forEach(function (k) { %><div class="font-mono text-emerald-700 dark:text-emerald-400">+ <%= k %></div><% }) %>
+      <% d.changed.forEach(function (k) { %><div class="font-mono text-amber-700 dark:text-amber-400">~ <%= k %></div><% }) %>
+      <% d.removed.forEach(function (k) { %><div class="font-mono text-red-700 dark:text-red-400">− <%= k %></div><% }) %>
+    </td>
+    <td class="td"><div class="flex items-center justify-end gap-3 whitespace-nowrap">
+      <a class="link" href="/manage/blueprints/<%= bp.id %>/versions/<%= v.id %>/source">Download</a>
+      <% if (i !== 0) { %>
+      <form method="post" action="/manage/blueprints/<%= bp.id %>/versions/<%= v.id %>/restore" data-confirm="Revision <%= v.version_no %> becomes a new current version; nothing is lost." data-confirm-title="Restore revision <%= v.version_no %>?" data-confirm-action="Restore"><%- include('../partials/csrf') %><button class="link">Restore</button></form>
+      <% } %>
+    </div></td>
+  </tr>
+  <% }) %>
+</table>
+</div>
+<p class="mt-3 text-sm text-slate-600 dark:text-slate-400">Restoring never deletes history: it saves the old content as a new version on top.</p>
+<%- include('../partials/foot') %>

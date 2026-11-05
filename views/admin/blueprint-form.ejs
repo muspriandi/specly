@@ -1,0 +1,82 @@
+<%- include('../partials/head', { wide: true }) %>
+<nav aria-label="Breadcrumb" class="mb-3 text-sm text-slate-600 dark:text-slate-400"><a class="link" href="/manage/blueprints">Blueprints</a> <span aria-hidden="true">/</span> <span><%= bp ? 'Edit' : 'Add' %></span></nav>
+<div class="card">
+  <h1 class="min-w-0 truncate text-xl font-bold" <%- bp ? 'title="' + bp.title.replace(/"/g, '&quot;') + '"' : '' %>><%= bp ? 'Edit “' + bp.title + '”' : 'Add blueprint' %></h1>
+  <p class="mb-4 mt-1 text-sm text-slate-600 dark:text-slate-400">Write or paste an OpenAPI 3.x / Swagger 2.0 document, or drop a file. Title and version come from <code>info</code>. Then preview, review the changes and <%= bp ? 'publish' : 'add it' %>.</p>
+  <% if (typeof error !== 'undefined') { %><div class="alert-error"><%= error %></div><% } %>
+  <form method="post" enctype="multipart/form-data" data-preview-render="/manage/blueprints/preview/render?_csrf=<%= csrfToken %>" data-preview="/manage/blueprints/preview<%= bp ? '?for=' + bp.id + '&' : '?' %>_csrf=<%= csrfToken %>" action="<%= bp ? '/manage/blueprints/' + bp.id : '/manage/blueprints' %>?_csrf=<%= csrfToken %>">
+    <div role="tablist" aria-label="Blueprint view" class="-mx-5 mb-4 flex gap-1 overflow-x-auto border-b border-slate-200 px-5 dark:border-slate-700" data-views>
+      <button type="button" role="tab" id="view-edit" aria-controls="vp-edit" aria-selected="true" class="view-tab">Edit</button>
+      <button type="button" role="tab" id="view-preview" aria-controls="vp-preview" aria-selected="false" tabindex="-1" class="view-tab">Preview</button>
+      <button type="button" role="tab" id="view-changes" aria-controls="vp-changes" aria-selected="false" tabindex="-1" class="view-tab">Changes <span class="badge-count hidden" data-changes-count></span></button>
+    </div>
+
+    <div id="vp-edit" role="tabpanel" aria-labelledby="view-edit">
+      <div id="bp-preview" class="mb-4 hidden rounded-lg border px-4 py-2.5 text-sm" role="status" aria-live="polite"></div>
+      <div class="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border-2 border-dashed border-slate-300 px-4 py-3 text-sm text-slate-600 transition dark:border-slate-700 dark:text-slate-400" data-drop>
+        <%- icon('file', 'size-5 shrink-0 text-slate-400') %>
+        <span data-drop-label>Drop a <code>.yaml</code>, <code>.yml</code> or <code>.json</code> file here, or</span>
+        <label class="btn btn-sm btn-ghost cursor-pointer has-[:focus-visible]:ring-2">Choose file<input class="sr-only" type="file" accept=".yaml,.yml,.json,application/json"></label>
+        <span class="text-slate-500">· or write / paste below (max 5 MB)</span>
+      </div>
+      <label class="sr-only" for="spec-content">Spec content</label>
+      <textarea id="spec-content" data-editor placeholder="Paste an OpenAPI 3.x / Swagger 2.0 document here (YAML or JSON), or click Starter above to begin from a template." class="field font-mono text-xs" name="content" rows="22" spellcheck="false" autocomplete="off" autocapitalize="off" wrap="off"><%= typeof content !== 'undefined' ? content : '' %></textarea>
+      <details class="mt-4 rounded-lg border border-slate-200 bg-slate-50 text-sm dark:border-slate-700 dark:bg-slate-900">
+        <summary class="cursor-pointer select-none px-4 py-2.5 font-medium">Guideline: flag an endpoint as WIP / under development</summary>
+        <div class="space-y-3 border-t border-slate-200 px-4 py-3 dark:border-slate-700">
+          <p>Sharing the contract before the endpoint is built? Add these two optional lines under the method (<code>get</code>, <code>post</code>, …) of the endpoint. Readers then see an orange badge in the sidebar and on the endpoint, with your note.</p>
+          <div class="grid gap-3 lg:grid-cols-2">
+            <div>
+              <div class="mb-1 flex items-center justify-between"><span class="eyebrow">YAML</span><button type="button" class="btn btn-sm btn-ghost" data-copy="x-status: wip&#10;x-status-description: Request body may still change.">Copy lines</button></div>
+              <pre class="overflow-x-auto rounded-lg bg-slate-900 p-3 font-mono text-xs leading-5 text-slate-100">paths:
+      /refunds:
+        post:
+          summary: Refund a charge
+          <span class="text-orange-300">x-status: wip</span>
+          <span class="text-orange-300">x-status-description: Request body may still change.</span>
+          responses: ...</pre>
+            </div>
+            <div>
+              <div class="mb-1 flex items-center justify-between"><span class="eyebrow">JSON</span><button type="button" class="btn btn-sm btn-ghost" data-copy="&quot;x-status&quot;: &quot;wip&quot;,&#10;&quot;x-status-description&quot;: &quot;Request body may still change.&quot;,">Copy lines</button></div>
+              <pre class="overflow-x-auto rounded-lg bg-slate-900 p-3 font-mono text-xs leading-5 text-slate-100">"/refunds": {
+      "post": {
+        "summary": "Refund a charge",
+        <span class="text-orange-300">"x-status": "wip",</span>
+        <span class="text-orange-300">"x-status-description": "Request body may still change.",</span>
+        "responses": { ... }
+      }
+}</pre>
+            </div>
+          </div>
+          <ul class="list-disc space-y-1 pl-5 text-slate-700 dark:text-slate-300">
+            <li><code>x-status</code>: the badge text, up to 30 characters. Any wording works: <code>wip</code>, <code>on progress</code>, <code>under development</code>, <code>beta</code>, <code>planned</code>.</li>
+            <li><code>x-status-description</code> (optional): the explanation shown on the endpoint's detail page. Without it a default "not final" message is shown. It has no effect without <code>x-status</code>.</li>
+            <li>It goes on each endpoint, not on the path or a folder. To mark one as ready, delete both lines and save: the change appears in the revision history.</li>
+            <li>Shown in the Collection view (default); the classic Swagger UI view ignores it.</li>
+          </ul>
+        </div>
+      </details>
+      <div class="mt-4"><button type="button" class="btn btn-ghost" data-goto="view-preview" disabled>Next: Preview →</button></div>
+    </div>
+
+    <div id="vp-preview" role="tabpanel" aria-labelledby="view-preview" hidden>
+      <p class="mb-3 text-sm text-slate-600 dark:text-slate-400" id="pv-hint" role="status" aria-live="polite"></p>
+      <p id="pv-empty" class="empty">Add valid content in the Edit tab, then render the preview.</p>
+      <iframe name="bp-frame" id="bp-frame" title="Draft preview" class="hidden h-[clamp(28rem,72vh,56rem)] w-full rounded-lg border border-slate-200 bg-white dark:border-slate-700"></iframe>
+      <div class="mt-4"><button type="button" class="btn btn-ghost" data-goto="view-changes" disabled>Next: Review changes →</button></div>
+    </div>
+
+    <div id="vp-changes" role="tabpanel" aria-labelledby="view-changes" hidden>
+      <div id="changes-body" class="text-sm"></div>
+      <p class="mt-4 text-sm text-slate-600 dark:text-slate-400">Happy with it? Add a note below and publish.</p>
+    </div>
+
+    <div class="sticky bottom-0 -mx-5 -mb-5 mt-6 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-b-xl border-t border-slate-200 bg-white/95 px-5 py-3 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95" data-bar>
+      <div class="min-w-0 flex-1 basis-56 text-sm" id="bar-summary" aria-live="polite"><span class="text-slate-500">Add content to continue.</span></div>
+      <% if (bp) { %><input class="field !mt-0 w-full sm:w-72" name="note" maxlength="200" aria-label="Change note (optional)" placeholder="Change note (optional)" data-note><% } %>
+      <a class="btn btn-ghost" href="/manage/blueprints">Cancel</a>
+      <button class="btn" data-save><%= bp ? 'Publish changes' : 'Add blueprint' %></button>
+    </div>
+  </form>
+</div>
+<%- include('../partials/foot') %>

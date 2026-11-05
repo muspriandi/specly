@@ -1,0 +1,110 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Weather API",
+    "version": "3.0.0",
+    "description": "Current conditions, forecasts and alerts for any location.\n\nAll endpoints are **read-only**. Temperatures use the `units` query parameter (`metric` by default)."
+  },
+  "servers": [{ "url": "https://weather.example.com/api/v3" }],
+  "tags": [
+    { "name": "Current", "description": "Live conditions." },
+    { "name": "Forecast" },
+    { "name": "Alerts" }
+  ],
+  "security": [{ "apiKeyQuery": [] }],
+  "paths": {
+    "/current": {
+      "get": {
+        "tags": ["Current"],
+        "summary": "Current weather",
+        "operationId": "getCurrent",
+        "parameters": [
+          { "name": "city", "in": "query", "required": true, "schema": { "type": "string", "example": "Jakarta" } },
+          { "name": "units", "in": "query", "schema": { "type": "string", "enum": ["metric", "imperial"], "default": "metric" } }
+        ],
+        "responses": {
+          "200": { "description": "Current conditions.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Conditions" } } } },
+          "404": { "description": "Unknown city." }
+        }
+      }
+    },
+    "/current/coordinates": {
+      "get": {
+        "tags": ["Current"],
+        "summary": "Current weather by coordinates",
+        "operationId": "getCurrentByCoordinates",
+        "parameters": [
+          { "name": "lat", "in": "query", "required": true, "schema": { "type": "number", "example": -6.2 } },
+          { "name": "lon", "in": "query", "required": true, "schema": { "type": "number", "example": 106.8 } }
+        ],
+        "responses": { "200": { "description": "Current conditions.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Conditions" } } } } }
+      }
+    },
+    "/forecast/daily": {
+      "get": {
+        "tags": ["Forecast"],
+        "summary": "7-day forecast",
+        "operationId": "getDailyForecast",
+        "parameters": [
+          { "name": "city", "in": "query", "required": true, "schema": { "type": "string", "example": "Jakarta" } },
+          { "name": "days", "in": "query", "schema": { "type": "integer", "minimum": 1, "maximum": 7, "default": 7 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Daily forecast.",
+            "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/DayForecast" } } } }
+          }
+        }
+      }
+    },
+    "/forecast/hourly": {
+      "get": {
+        "tags": ["Forecast"],
+        "summary": "48-hour forecast",
+        "operationId": "getHourlyForecast",
+        "parameters": [{ "name": "city", "in": "query", "required": true, "schema": { "type": "string", "example": "Jakarta" } }],
+        "responses": { "200": { "description": "Hourly forecast.", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Conditions" } } } } } }
+      }
+    },
+    "/alerts": {
+      "get": {
+        "tags": ["Alerts"],
+        "summary": "Active weather alerts",
+        "operationId": "listAlerts",
+        "parameters": [{ "name": "region", "in": "query", "schema": { "type": "string", "example": "ID-JK" } }],
+        "responses": {
+          "200": {
+            "description": "Alerts currently in force.",
+            "content": { "application/json": { "example": [{ "id": "a1", "severity": "moderate", "headline": "Heavy rain expected", "ends": "2026-11-02T18:00:00Z" }] } }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": { "apiKeyQuery": { "type": "apiKey", "in": "query", "name": "appid" } },
+    "schemas": {
+      "Conditions": {
+        "type": "object",
+        "properties": {
+          "city": { "type": "string", "example": "Jakarta" },
+          "temperature": { "type": "number", "example": 31.5 },
+          "humidity": { "type": "integer", "example": 74 },
+          "wind": { "type": "object", "properties": { "speed": { "type": "number", "example": 3.4 }, "direction": { "type": "string", "example": "NE" } } },
+          "summary": { "type": "string", "example": "Partly cloudy" },
+          "observedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "DayForecast": {
+        "type": "object",
+        "properties": {
+          "date": { "type": "string", "format": "date" },
+          "min": { "type": "number", "example": 25 },
+          "max": { "type": "number", "example": 33 },
+          "chanceOfRain": { "type": "integer", "example": 60 },
+          "summary": { "type": "string", "example": "Afternoon thunderstorms" }
+        }
+      }
+    }
+  }
+}

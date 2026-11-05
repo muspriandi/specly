@@ -1,0 +1,45 @@
+<%- include('partials/head') %>
+<%
+  var esc = function (t) { return String(t == null ? '' : t).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+  var hl = function (t) {
+    var s = esc(t); if (!q) return s;
+    var needle = esc(q).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return s.replace(new RegExp(needle, 'ig'), function (m) { return '<mark class="rounded bg-yellow-200 px-0.5 text-slate-900 dark:bg-yellow-300">' + m + '</mark>'; });
+  };
+%>
+<h1 class="text-2xl font-bold">Search<% if (scope) { %> in <%= scope.title %><% } %></h1>
+<% if (scope) { %><p class="mt-1 text-sm"><a class="link" href="/blueprints/<%= scope.id %>">← Back to <%= scope.title %></a> · <a class="link" href="/search?q=<%= encodeURIComponent(q) %>">Search all blueprints</a></p><% } %>
+<% if (!q) { %>
+  <div class="card mt-4 !p-0"><div class="empty">
+    <%- icon('search', 'size-8') %>
+    <p>Type a keyword in the search bar: a blueprint name, a path, a method or an operation summary.</p>
+    <p class="flex flex-wrap justify-center gap-2">
+      <% ['/tasks', 'POST', 'DELETE', 'auth'].forEach(function (x) { %><a class="badge badge-neutral hover:border-brand-500" href="/search?q=<%= encodeURIComponent(x) %>"><%= x %></a><% }) %>
+    </p>
+  </div></div>
+<% } else { %>
+  <p class="mt-1 text-sm text-slate-600 dark:text-slate-400" role="status"><% if (!scope) { %><%= blueprints.length %> blueprint<%= blueprints.length === 1 ? '' : 's' %> and <% } %><%= endpoints.length %> endpoint<%= endpoints.length === 1 ? '' : 's' %> match “<%= q %>”.</p>
+  <% if (blueprints.length) { %>
+    <h2 class="mb-3 mt-6 text-lg font-semibold">Blueprints</h2>
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"><% blueprints.forEach(function (b) { %><%- include('partials/bp-card', { b }) %><% }) %></div>
+  <% } %>
+  <% if (endpoints.length) { %>
+    <h2 class="mb-3 mt-6 text-lg font-semibold">Endpoints</h2>
+    <div class="card overflow-x-auto !p-0">
+      <table class="w-full text-sm">
+        <caption class="sr-only">Matching endpoints</caption>
+        <thead class="border-b border-slate-200 dark:border-slate-800"><tr><th scope="col" class="th">Method</th><th scope="col" class="th">Path</th><th scope="col" class="th">Summary</th><th scope="col" class="th">Blueprint</th></tr></thead>
+        <% endpoints.forEach(function (e) { %>
+        <tr class="tr">
+          <td class="td"><%- include('partials/method', { m: e.method }) %></td>
+          <td class="td whitespace-nowrap"><a class="link font-mono" href="/blueprints/<%= e.blueprint_id %>#/<%= encodeURIComponent(e.tag) %>/<%= encodeURIComponent(e.operation_id || (e.method.toLowerCase() + e.path.replace(/[^\w]/g, '_'))) %>"><%- hl(e.path) %></a></td>
+          <td class="td"><%- hl(e.summary) %></td>
+          <td class="td text-xs text-slate-600 dark:text-slate-400"><span class="clip" title="<%= e.blueprint_title %>"><%= e.blueprint_title %></span></td>
+        </tr>
+        <% }) %>
+      </table>
+    </div>
+  <% } %>
+  <% if (!blueprints.length && !endpoints.length) { %><div class="card mt-4 !p-0"><div class="empty"><%- icon('search', 'size-8') %><p>No results for “<%= q %>”. Check the spelling or try a shorter keyword.</p></div></div><% } %>
+<% } %>
+<%- include('partials/foot') %>

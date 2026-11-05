@@ -1,0 +1,43 @@
+<%- include('../partials/head') %>
+<h1 class="mb-4 text-2xl font-bold">Invitations</h1>
+<div class="card max-w-2xl">
+  <p class="mb-4 text-sm text-slate-600 dark:text-slate-400">Each guest receives an email with a link (valid 72 hours) to create their account. After that they can request access to blueprints.</p>
+  <% if (typeof error !== 'undefined') { %><div class="alert-error"><%= error %></div><% } %>
+  <form method="post" action="/manage/invites"><%- include('../partials/csrf') %>
+    <label class="label">Email addresses
+      <textarea class="field" name="emails" data-email-chips="#invite-chips" rows="6" required placeholder="one@example.com&#10;two@example.com, three@example.com"><%= typeof emails !== 'undefined' ? emails : '' %></textarea>
+    </label>
+    <div id="invite-chips" class="mb-3 flex flex-wrap gap-1.5" aria-live="polite"></div>
+    <p class="mb-4 text-xs text-slate-600 dark:text-slate-400">Separate with new lines, commas or semicolons. Up to <%= maxBatch %> at a time.</p>
+    <button class="btn">Send invitations</button>
+  </form>
+</div>
+<% if (typeof result !== 'undefined') { %>
+<div class="card mt-4 max-w-2xl">
+  <h2 class="mb-2 font-semibold">Result</h2>
+  <% if (result.sent.length) { %><p class="text-sm text-emerald-700 dark:text-emerald-400">✓ <%= result.sent.length %> invitation(s) sent: <%= result.sent.join(', ') %></p><% } %>
+  <% if (result.mailFailed.length) { %><p class="mt-2 text-sm text-amber-700 dark:text-amber-400">⚠ Created but the email failed (check SMTP): <%= result.mailFailed.join(', ') %></p><% } %>
+  <% if (result.skipped.length) { %>
+    <p class="mt-2 text-sm text-red-700 dark:text-red-400">✗ Skipped <%= result.skipped.length %>:</p>
+    <ul class="ml-5 list-disc text-sm text-slate-600 dark:text-slate-400"><% result.skipped.forEach(function (x) { %><li><%= x.email %> — <%= x.reason %></li><% }) %></ul>
+  <% } %>
+</div>
+<% } %>
+<h2 class="mb-3 mt-8 text-lg font-semibold">Pending invitations</h2>
+<%- include('../partials/list-search', { placeholder: 'Search by email', filter: filter }) %>
+<div class="card overflow-x-auto !p-0">
+<% if (!pending.length) { %><div class="empty"><p><%= filter ? 'No invitations match “' + filter + '”.' : 'No pending invitations.' %></p></div><% } else { %>
+<table class="w-full text-sm">
+  <thead class="border-b border-slate-200 dark:border-slate-800"><tr><th scope="col" class="th">Email</th><th scope="col" class="th">Invited by</th><th scope="col" class="th">Sent</th><th scope="col" class="th">Status</th></tr></thead>
+  <% pending.forEach(function (p) { %>
+  <tr class="tr">
+    <td class="td"><span class="clip" title="<%= p.email %>"><%= p.email %></span></td><td class="td"><span class="clip" title="<%= (p.invited_by || '—') %>"><%= (p.invited_by || '—') %></span></td>
+    <td class="td text-xs text-slate-600 dark:text-slate-400"><%= fmt(p.created_at) %></td>
+    <td class="td"><span class="badge <%= p.expired ? 'border-red-400 text-red-600' : 'border-amber-500 text-amber-700 dark:text-amber-400' %>"><%= p.expired ? 'Expired' : 'Waiting' %></span></td>
+  </tr>
+  <% }) %>
+</table>
+<% } %>
+</div>
+<%- include('../partials/pager', { pg: pg }) %>
+<%- include('../partials/foot') %>

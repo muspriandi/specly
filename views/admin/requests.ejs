@@ -1,0 +1,51 @@
+<%- include('../partials/head') %>
+<h1 class="mb-4 text-2xl font-bold">Access requests</h1>
+<h2 class="mb-3 flex items-center gap-2 text-lg font-semibold">Pending <span class="badge <%= pp.total ? 'badge-warn' : 'badge-neutral' %>"><%= pp.total %></span></h2>
+<% if (pending.length > 1) { %>
+<form id="bulk" method="post" action="/manage/requests/bulk" class="mb-3 flex flex-wrap items-center gap-2"><%- include('../partials/csrf') %>
+  <span class="text-sm text-slate-600 dark:text-slate-400" data-bulk-count aria-live="polite">0 selected</span>
+  <button name="action" value="approve" class="btn btn-sm" data-bulk-btn disabled>Approve selected</button>
+  <button name="action" value="reject" class="btn btn-sm btn-ghost" data-bulk-btn disabled>Reject selected</button>
+</form>
+<% } %>
+<div class="card overflow-x-auto !p-0">
+<% if (!pending.length) { %><div class="empty"><%- icon('check', 'size-8') %><p>All caught up. Nothing is waiting for review.</p></div><% } else { %>
+<table class="w-full text-sm">
+  <thead class="border-b border-slate-200 dark:border-slate-800"><tr><% if (pending.length > 1) { %><th scope="col" class="th w-10"><input type="checkbox" class="size-4 accent-brand-600" data-bulk-all aria-label="Select all pending requests"></th><% } %><th scope="col" class="th">Guest</th><th scope="col" class="th">Blueprint</th><th scope="col" class="th">Message</th><th scope="col" class="th">Requested</th><th scope="col" class="th"><span class="sr-only">Actions</span></th></tr></thead>
+  <% pending.forEach(function (r) { %>
+  <tr class="tr">
+    <% if (pending.length > 1) { %><td class="td"><input type="checkbox" class="size-4 accent-brand-600" name="ids" value="<%= r.id %>" form="bulk" data-bulk-row aria-label="Select request from <%= r.user_name %>"></td><% } %>
+    <td class="td"><span class="clip" title="<%= r.user_name %>"><%= r.user_name %></span><div class="text-xs text-slate-600 dark:text-slate-400"><span class="clip" title="<%= r.user_email %>"><%= r.user_email %></span></div></td>
+    <td class="td"><span class="clip" title="<%= r.blueprint_title %>"><%= r.blueprint_title %></span></td>
+    <td class="td"><span class="clip !max-w-xs" title="<%= (r.message || '—') %>"><%= (r.message || '—') %></span></td>
+    <td class="td text-xs text-slate-600 dark:text-slate-400"><%= fmt(r.created_at) %></td>
+    <td class="td"><div class="flex justify-end gap-2">
+      <form method="post" action="/manage/requests/<%= r.id %>/approve"><%- include('../partials/csrf') %><button class="btn btn-sm">Approve</button></form>
+      <form method="post" action="/manage/requests/<%= r.id %>/reject"><%- include('../partials/csrf') %><button class="btn btn-sm btn-ghost">Reject</button></form>
+    </div></td>
+  </tr>
+  <% }) %>
+</table>
+<% } %>
+</div>
+<%- include('../partials/pager', { pg: pp }) %>
+<h2 class="mb-3 mt-8 text-lg font-semibold">History</h2>
+<div class="card overflow-x-auto !p-0">
+<% if (!history.length) { %><p class="p-5 text-sm text-slate-600 dark:text-slate-400">No decisions yet.</p><% } else { %>
+<table class="w-full text-sm">
+  <thead class="border-b border-slate-200 dark:border-slate-800"><tr><th scope="col" class="th">Guest</th><th scope="col" class="th">Blueprint</th><th scope="col" class="th">Decision</th><th scope="col" class="th">By</th><th scope="col" class="th"><span class="sr-only">Actions</span></th></tr></thead>
+  <% history.forEach(function (r) { %>
+  <tr class="tr">
+    <td class="td"><span class="clip" title="<%= r.user_name %>"><%= r.user_name %></span></td><td class="td"><span class="clip" title="<%= r.blueprint_title %>"><%= r.blueprint_title %></span></td>
+    <td class="td"><span class="badge <%= r.status === 'approved' ? 'badge-ok' : r.status === 'cancelled' ? 'badge-neutral' : 'badge-bad' %>"><%= r.status %></span></td>
+    <td class="td text-xs text-slate-600 dark:text-slate-400"><%= r.decider || '—' %> · <%= fmt(r.decided_at) %></td>
+    <td class="td text-right"><% if (r.status === 'approved') { %>
+      <form method="post" action="/manage/requests/<%= r.id %>/revoke" data-confirm="<%= r.user_name %> will lose access to “<%= r.blueprint_title %>”." data-confirm-title="Revoke access?" data-confirm-action="Revoke"><%- include('../partials/csrf') %><button class="link-danger">Revoke</button></form>
+    <% } %></td>
+  </tr>
+  <% }) %>
+</table>
+<% } %>
+</div>
+<%- include('../partials/pager', { pg: hp }) %>
+<%- include('../partials/foot') %>

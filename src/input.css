@@ -1,0 +1,134 @@
+@import "tailwindcss";
+@source "../views";
+@source "../public";
+
+/* Dark mode follows the .dark class, set by /static/theme.js (stored choice, else the OS setting). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Design tokens: one brand accent, one HTTP-method palette shared by the EJS views and the viewer. */
+@theme {
+  --color-brand-50: oklch(0.97 0.02 277);
+  --color-brand-400: oklch(0.68 0.17 277);
+  --color-brand-500: oklch(0.58 0.21 277);
+  --color-brand-600: oklch(0.51 0.23 277);
+  --color-brand-700: oklch(0.45 0.21 277);
+  --color-m-get: #15803d;
+  --color-m-post: #2563eb;
+  --color-m-put: #b45309;
+  --color-m-patch: #7c3aed;
+  --color-m-delete: #dc2626;
+}
+
+html { color-scheme: light; }
+html.dark { color-scheme: dark; }
+
+/* Reusable UI pieces, built from Tailwind utilities. */
+@layer components {
+  .view-tab { @apply -mb-px cursor-pointer whitespace-nowrap border-b-2 border-transparent px-4 py-2.5 text-sm font-medium text-slate-600 hover:text-slate-900 aria-selected:border-brand-600 aria-selected:text-brand-700 dark:text-slate-400 dark:hover:text-slate-100 dark:aria-selected:border-brand-400 dark:aria-selected:text-brand-400; }
+  .badge-count { @apply ml-1 inline-block min-w-5 rounded-full bg-brand-600 px-1.5 text-center text-xs font-semibold leading-5 text-white; }
+  .card   { @apply rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900; }
+  .clip   { @apply inline-block max-w-[16rem] truncate align-bottom; }
+  .field  { @apply mt-1 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-900 shadow-sm outline-none placeholder:text-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100; }
+  .field[aria-invalid="true"] { @apply border-red-500 focus:border-red-500 focus:ring-red-500/30; }
+  .label  { @apply mb-4 block text-sm font-medium text-slate-700 dark:text-slate-300; }
+  .hint   { @apply mt-1 block text-xs font-normal text-slate-600 dark:text-slate-400; }
+
+  .btn    { @apply inline-flex min-h-9 cursor-pointer items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:focus-visible:ring-offset-slate-900; }
+  .btn-sm { @apply min-h-8 px-3 py-1.5 text-xs; }
+  .btn-ghost { @apply border border-brand-600 bg-transparent text-brand-600 shadow-none hover:bg-brand-50 dark:border-brand-400 dark:text-brand-400 dark:hover:bg-slate-800; }
+  .btn-danger { @apply bg-red-600 hover:bg-red-500 focus-visible:ring-red-500; }
+  .btn[aria-busy="true"] { @apply pointer-events-none opacity-70; }
+  .btn[aria-busy="true"]::before { content: ""; @apply size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent; }
+
+  .link   { @apply cursor-pointer rounded text-sm font-medium text-brand-600 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 dark:text-brand-400; }
+  .link-danger { @apply cursor-pointer rounded text-sm font-medium text-red-700 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500 dark:text-red-400; }
+
+  .badge  { @apply inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium; }
+  .badge-neutral { @apply border-slate-300 text-slate-600 dark:border-slate-700 dark:text-slate-300; }
+  .badge-ok      { @apply border-emerald-600/50 bg-emerald-50 text-emerald-800 dark:border-emerald-500/40 dark:bg-emerald-950 dark:text-emerald-300; }
+  .badge-warn    { @apply border-amber-600/50 bg-amber-50 text-amber-800 dark:border-amber-500/40 dark:bg-amber-950 dark:text-amber-300; }
+  .badge-bad     { @apply border-red-600/50 bg-red-50 text-red-800 dark:border-red-500/40 dark:bg-red-950 dark:text-red-300; }
+  .badge-info    { @apply border-brand-600/50 bg-brand-50 text-brand-700 dark:border-brand-400/40 dark:bg-slate-800 dark:text-brand-400; }
+
+  .th     { @apply px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-400; }
+  .td     { @apply px-4 py-3 align-middle; }
+  .tr     { @apply border-b border-slate-100 last:border-0 hover:bg-slate-50/70 dark:border-slate-800 dark:hover:bg-slate-800/40; }
+  .eyebrow { @apply text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-400; }
+
+  .alert-error  { @apply mb-4 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200; }
+  .alert-info   { @apply mb-4 rounded-lg border border-brand-600/30 bg-brand-50 px-4 py-3 text-sm text-brand-700 dark:border-brand-400/30 dark:bg-slate-800 dark:text-slate-100; }
+  .alert-warn   { @apply mb-4 rounded-lg border border-amber-400 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200; }
+
+  /* Header navigation */
+  .nav-link { @apply rounded-md px-2.5 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white; }
+  .nav-link[aria-current="page"] { @apply bg-brand-50 text-brand-700 dark:bg-slate-800 dark:text-brand-400; }
+  .menu { @apply absolute right-0 z-20 mt-2 min-w-48 rounded-lg border border-slate-200 bg-white p-1 shadow-lg dark:border-slate-700 dark:bg-slate-900; }
+  .menu a, .menu button { @apply block w-full rounded-md px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800; }
+  .menu a[aria-current="page"] { @apply font-semibold text-brand-700 dark:text-brand-400; }
+
+  /* Empty states */
+  .empty { @apply flex flex-col items-center gap-2 px-6 py-10 text-center text-sm text-slate-600 dark:text-slate-400; }
+  .empty svg { @apply size-8 text-slate-400; }
+
+  /* HTTP methods (solid pill + plain text variant) */
+  .method { @apply inline-block w-16 rounded px-2 py-0.5 text-center font-mono text-xs font-bold text-white; }
+  .m-get { @apply bg-m-get; } .m-post { @apply bg-m-post; } .m-put { @apply bg-m-put; } .m-patch { @apply bg-m-patch; } .m-delete { @apply bg-m-delete; } .m-other { @apply bg-slate-500; }
+  .mt-get { @apply text-green-700 dark:text-green-400; } .mt-post { @apply text-blue-700 dark:text-blue-400; } .mt-put { @apply text-amber-700 dark:text-amber-400; }
+  .mt-patch { @apply text-violet-700 dark:text-violet-400; } .mt-delete { @apply text-red-700 dark:text-red-400; } .mt-other { @apply text-slate-600 dark:text-slate-400; }
+
+  /* Loading placeholder */
+  .skeleton { @apply animate-pulse rounded bg-slate-200 dark:bg-slate-800; }
+
+  /* Native <dialog> used for confirms and access requests */
+  dialog.modal { @apply m-auto w-[min(28rem,calc(100vw-2rem))] rounded-xl border border-slate-200 bg-white p-0 text-slate-900 shadow-xl dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100; }
+  dialog.modal::backdrop { @apply bg-slate-900/50; }
+
+  /* Toast */
+  #toasts { @apply pointer-events-none fixed right-4 top-[4.5rem] z-50 flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-2; }
+  .toast { @apply pointer-events-auto flex items-start gap-3 rounded-lg border border-l-4 bg-white px-4 py-3 text-sm text-slate-900 shadow-lg dark:bg-slate-900 dark:text-slate-100; animation: toast-in 0.25s ease; }
+  .toast-success { @apply border-emerald-200 border-l-emerald-600 dark:border-emerald-900 dark:border-l-emerald-500; }
+  .toast-success > svg { @apply text-emerald-600 dark:text-emerald-400; }
+  .toast-error { @apply border-red-200 border-l-red-600 dark:border-red-900 dark:border-l-red-500; }
+  .toast-error > svg { @apply text-red-600 dark:text-red-400; }
+  .toast-info { @apply border-sky-200 border-l-sky-600 dark:border-sky-900 dark:border-l-sky-500; }
+  .toast-info > svg { @apply text-sky-600 dark:text-sky-400; }
+  .toast-close { @apply -mr-1 -mt-0.5 cursor-pointer rounded px-1.5 text-lg leading-none text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100; }
+  .toast-out { opacity: 0; transform: translateX(1rem); transition: opacity 0.2s, transform 0.2s; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton, .btn[aria-busy="true"]::before { animation: none; }
+}
+
+/* Rendered markdown (spec descriptions). */
+@layer components {
+  .md { @apply mt-4 text-sm leading-relaxed text-slate-700 dark:text-slate-300; }
+  .md > :first-child { @apply mt-0; }
+  .md h1, .md h2, .md h3 { @apply mb-2 mt-5 font-semibold text-slate-900 dark:text-slate-100; }
+  .md h1 { @apply text-xl; } .md h2 { @apply text-lg; } .md h3 { @apply text-base; }
+  .md p { @apply my-2; }
+  .md ul { @apply my-2 list-disc pl-6; } .md ol { @apply my-2 list-decimal pl-6; }
+  .md a { @apply text-brand-600 underline dark:text-brand-400; }
+  .md code { @apply rounded bg-slate-100 px-1 py-0.5 font-mono text-xs dark:bg-slate-800; }
+  .md pre { @apply my-3 overflow-auto rounded-lg bg-[#212121] p-3 text-slate-100; }
+  .md pre code { @apply bg-transparent p-0; }
+  .md table { @apply my-3 w-full border-collapse text-sm; }
+  .md th, .md td { @apply border border-slate-200 px-3 py-1.5 text-left dark:border-slate-700; }
+  .md th { @apply bg-slate-50 font-semibold dark:bg-slate-800; }
+  .md blockquote { @apply my-3 border-l-4 border-slate-300 pl-3 text-slate-600 dark:text-slate-400; }
+}
+
+/* Smooth theme switch. View Transitions cross-fades the page; the class is the fallback for older browsers. */
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: 0.3s; animation-timing-function: ease; }
+.theme-anim, .theme-anim *, .theme-anim *::before, .theme-anim *::after {
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, fill 0.3s ease, stroke 0.3s ease !important;
+}
+
+@keyframes toast-in { from { opacity: 0; transform: translateX(1rem); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .toast { animation: none; } .toast-out { transition: none; } }
+
+/* Spec editor: long lines scroll sideways (arrow keys / shift+wheel) without a horizontal scrollbar; the vertical one stays. */
+.editor-ta { scrollbar-width: thin; }
+.editor-ta::-webkit-scrollbar { width: 10px; height: 0; }
+.editor-ta::-webkit-scrollbar-thumb { border-radius: 9999px; background: rgb(148 163 184 / 0.5); }
+.editor-ta::-webkit-scrollbar-corner { background: transparent; }

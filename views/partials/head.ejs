@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title><%= title %> · Specly</title>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<script src="/static/theme.js"></script>
+<link rel="stylesheet" href="/static/app.css">
+<% if (typeof swagger !== 'undefined') { %><link rel="stylesheet" href="/static/swagger/swagger-ui.css"><% } %>
+</head>
+<body class="min-h-screen bg-slate-50 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100">
+<a href="#main" class="sr-only z-50 rounded-md bg-white px-3 py-2 text-sm font-medium text-brand-700 focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:shadow-lg">Skip to content</a>
+<% var cur = typeof currentPath === 'string' ? currentPath : ''; var onAdmin = cur.indexOf('/manage') === 0; %>
+<% if (user) { %>
+<header class="sticky top-0 z-10 border-b border-slate-200 bg-white/90 backdrop-blur dark:border-slate-800 dark:bg-slate-900/90">
+  <div class="mx-auto flex flex-wrap items-center gap-x-2 gap-y-2 px-4 py-2.5 sm:gap-x-4 sm:px-6 max-w-6xl">
+    <a href="/" class="text-xl font-extrabold tracking-tight">Spec<span class="text-brand-600 dark:text-brand-400">ly</span></a>
+    <% var scoped = typeof scope !== 'undefined' && scope; %>
+    <form action="/search" method="get" role="search" class="relative order-3 w-full sm:order-none sm:w-auto sm:flex-1">
+      <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><%- icon('search') %></span>
+      <% if (scoped) { %><input type="hidden" name="bp" value="<%= scope.id %>"><% } %>
+      <input type="search" name="q" value="<%= q %>" placeholder="<%= scoped ? 'Search in ' + scope.title + '…  ( / )' : 'Search blueprints, endpoints, methods…  ( / )' %>" aria-label="<%= scoped ? 'Search in ' + scope.title : 'Search' %>" <%- scoped ? 'data-scope="' + scope.id + '"' : '' %> data-global-search role="combobox" aria-expanded="false" aria-controls="search-suggest" aria-autocomplete="list" autocomplete="off" class="field !mt-0 !pl-9 sm:max-w-md">
+      <div id="search-suggest" role="listbox" aria-label="Search suggestions" hidden class="absolute left-0 top-full z-30 mt-1 w-full overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg sm:max-w-md dark:border-slate-700 dark:bg-slate-900"></div>
+    </form>
+    <nav aria-label="Main" class="order-2 ml-auto flex items-center gap-1 sm:order-none">
+      <a href="/" class="nav-link" <%- cur === '/' || cur.indexOf('/blueprints') === 0 || cur === '/search' ? 'aria-current="page"' : '' %>><span class="sm:hidden" aria-hidden="true">Docs</span><span class="sr-only sm:not-sr-only">Documentation</span></a>
+      <% if (user.role === 'admin') { %>
+      <details class="relative" data-menu>
+        <summary class="nav-link flex cursor-pointer list-none items-center gap-1 [&::-webkit-details-marker]:hidden" <%- onAdmin ? 'aria-current="page"' : '' %>>
+          Manage <% if (pendingCount) { %><span class="badge badge-warn !px-1.5 !py-0" title="<%= pendingCount %> pending access request(s)"><%= pendingCount %></span><% } %><%- icon('chevron', 'size-3.5') %>
+        </summary>
+        <div class="menu">
+          <% [['/manage/blueprints','Blueprints'],['/manage/users','Users'],['/manage/invites','Invitations'],['/manage/requests','Access requests'],['/manage/audit','Audit log'],['/manage/trash','Trash']].forEach(function (l) { %>
+            <a href="<%= l[0] %>" <%- cur.indexOf(l[0]) === 0 ? 'aria-current="page"' : '' %> class="flex items-center justify-between"><%= l[1] %><% if (l[0] === '/manage/requests' && pendingCount) { %><span class="badge badge-warn !px-1.5 !py-0"><%= pendingCount %></span><% } %></a>
+          <% }) %>
+        </div>
+      </details>
+      <% } %>
+      <button type="button" data-theme-toggle class="nav-link grid size-9 place-items-center !p-0" aria-label="Toggle dark mode" title="Toggle dark mode">
+        <%- icon('moon', 'size-5 dark:hidden') %><%- icon('sun', 'hidden size-5 dark:block') %>
+      </button>
+      <details class="relative" data-menu>
+        <summary class="nav-link flex cursor-pointer list-none items-center gap-2 [&::-webkit-details-marker]:hidden" aria-label="Account menu">
+          <span class="grid size-7 place-items-center rounded-full bg-brand-600 text-xs font-bold text-white" aria-hidden="true"><%= (user.name || user.email || '?').trim().charAt(0).toUpperCase() %></span>
+          <span class="hidden max-w-32 truncate sm:inline"><%= user.name %></span><%- icon('chevron', 'size-3.5') %>
+        </summary>
+        <div class="menu">
+          <div class="px-3 py-2"><div class="truncate text-sm font-semibold"><%= user.name %></div><div class="truncate text-xs text-slate-600 dark:text-slate-400"><%= user.email %></div><span class="badge badge-neutral mt-1"><%= user.role %></span></div>
+          <hr class="my-1 border-slate-200 dark:border-slate-700">
+          <a href="/account/password" <%- cur === '/account/password' ? 'aria-current="page"' : '' %>>Change password</a>
+          <form action="/logout" method="post"><%- include('csrf') %><button>Sign out</button></form>
+        </div>
+      </details>
+    </nav>
+  </div>
+</header>
+<% } %>
+<main id="main" class="mx-auto px-4 pb-16 pt-6 sm:px-6 <%= typeof wide !== 'undefined' && wide ? 'max-w-7xl' : 'max-w-6xl' %>">
+<% if (flash) { %><div class="alert-<%= flash.type === 'error' ? 'error' : 'info' %>" role="status" data-flash data-flash-type="<%= flash.type %>"><%= flash.message %></div><% } %>

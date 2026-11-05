@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title><%= title %> · Specly</title>
+<script src="/static/theme.js"></script>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body class="min-h-screen bg-slate-50 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100">
+<div class="sticky top-0 z-20 flex flex-wrap items-center gap-x-2 border-b border-orange-300 bg-orange-50 px-4 py-2 text-sm text-orange-900 dark:border-orange-700 dark:bg-orange-950 dark:text-orange-200" role="note">
+  <strong>Draft preview</strong><span>Unsaved content from the form. It refreshes as you edit.</span>
+</div>
+<main class="p-4">
+<% if (error) { %>
+<div class="alert-error" role="alert"><p class="font-medium">This document can't be previewed.</p><p class="mt-1 text-sm"><%= error %></p></div>
+<% } else { %>
+<div id="doc"></div>
+<script type="application/json" id="doc-spec"><%- specJson %></script>
+<script src="/static/vendor/marked/marked.umd.js"></script>
+<script src="/static/vendor/dompurify/purify.min.js"></script>
+<script src="/static/doc-model.js"></script>
+<script src="/static/postman-view.js"></script>
+<% } %>
+</main>
+</body>
+</html>

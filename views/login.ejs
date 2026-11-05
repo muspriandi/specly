@@ -1,0 +1,18 @@
+<%- include('partials/head') %>
+<div class="mx-auto mt-10 max-w-sm sm:mt-20">
+<div class="mb-6 text-center">
+  <div class="mx-auto mb-3 grid size-12 place-items-center rounded-xl bg-brand-600 text-white shadow-sm" aria-hidden="true"><%- icon('file', 'size-6') %></div>
+  <h1 class="text-3xl font-extrabold tracking-tight">Spec<span class="text-brand-600 dark:text-brand-400">ly</span></h1>
+  <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">Your team's API documentation, in one place.</p>
+</div>
+<div class="card">
+  <% if (typeof error !== 'undefined') { %><div class="alert-error"><%= error %></div><% } %>
+  <form method="post" action="/login"><%- include('partials/csrf') %>
+    <label class="label">Email <input class="field" type="email" name="email" value="<%= email %>" required autofocus autocomplete="username"></label>
+    <label class="label">Password <input class="field" type="password" name="password" required autocomplete="current-password"></label>
+    <button class="btn w-full">Sign in</button>
+  </form>
+  <p class="mt-4 text-center"><a class="link" href="/forgot">Forgot your password?</a></p>
+</div>
+</div>
+<%- include('partials/foot') %>

@@ -1,0 +1,31 @@
+<div class="card relative flex min-w-0 flex-col gap-3 transition <%= b.access === 'granted' ? 'hover:border-brand-500/60 hover:shadow-md' : '' %>">
+  <div class="flex items-start justify-between gap-2">
+    <h2 class="line-clamp-2 min-w-0 [overflow-wrap:anywhere] font-semibold" title="<%= b.title %>">
+      <% if (b.access === 'granted') { %><a class="after:absolute after:inset-0 hover:text-brand-600 dark:hover:text-brand-400" href="/blueprints/<%= b.id %>"><%= b.title %></a>
+      <% } else { %><%= b.title %><% } %>
+    </h2>
+    <% if (b.version) { %><span class="badge badge-neutral shrink-0">v<%= b.version %></span><% } %>
+  </div>
+  <p class="line-clamp-3 text-sm text-slate-600 dark:text-slate-400"><%= (b.description || 'No description.').trim().split(/\n\s*\n/)[0].replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/[#*`>|_]+/g, '').replace(/\s+/g, ' ').trim().slice(0, 200) %></p>
+  <div class="mt-auto flex flex-wrap items-center justify-between gap-2">
+    <% if (b.access === 'granted') { %>
+      <span class="flex items-center gap-3 text-xs text-slate-600 dark:text-slate-400">
+        <span><%= b.endpoint_count %> endpoint<%= b.endpoint_count === 1 ? '' : 's' %></span>
+        <% if (b.updated_at) { %><span>Updated <%= fmt(b.updated_at).replace(/, \d\d:\d\d.*$/, '') %></span><% } %>
+      </span>
+      <span class="text-sm font-medium text-brand-600 dark:text-brand-400" aria-hidden="true">Open docs →</span>
+    <% } else if (b.access === 'pending') { %>
+      <span class="badge badge-warn"><%- icon('clock', 'size-3.5') %> Access request pending</span>
+    <% } else { %>
+      <span class="badge badge-neutral"><%- icon('lock', 'size-3.5') %> Access required</span>
+      <% if (b.access === 'rejected') { %><span class="badge badge-bad">Previous request declined</span><% } %>
+      <% if (user.role === 'member') { %><details class="group w-full">
+        <summary class="btn btn-sm btn-ghost list-none [&::-webkit-details-marker]:hidden group-open:hidden"><%= b.access === 'rejected' ? 'Request again' : 'Request access' %></summary>
+        <form method="post" action="/blueprints/<%= b.id %>/request" class="flex flex-col gap-2 sm:flex-row"><%- include('csrf') %>
+          <input class="field !mt-0 min-w-0 flex-1" name="message" aria-label="Why do you need access? (optional)" placeholder="Why do you need access? (optional)" maxlength="500">
+          <button class="btn btn-sm shrink-0">Send request</button>
+        </form>
+      </details><% } %>
+    <% } %>
+  </div>
+</div>

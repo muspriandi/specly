@@ -1,0 +1,17 @@
+<%- include('../partials/head') %>
+<div class="card mx-auto mt-4 max-w-md">
+  <h1 class="mb-4 text-xl font-bold"><%= isNew ? 'New user' : 'Edit user' %></h1>
+  <% if (typeof error !== 'undefined') { %><div class="alert-error"><%= error %></div><% } %>
+  <form method="post" action="<%= isNew ? '/manage/users' : '/manage/users/' + u.id %>"><%- include('../partials/csrf') %>
+    <label class="label">Name <input class="field" name="name" value="<%= u.name || '' %>" required></label>
+    <label class="label">Email <input class="field disabled:opacity-60" type="email" name="email" value="<%= u.email || '' %>" <%= isNew ? 'required' : 'disabled' %>></label>
+    <label class="label">Role
+      <select class="field" name="role"><% roles.forEach(function (r) { %><option value="<%= r %>" <%= (u.role || 'member') === r ? 'selected' : '' %>><%= r %></option><% }) %></select>
+    </label>
+    <label class="label">Password <%= isNew ? '' : '(leave blank to keep)' %>
+      <input class="field" type="password" name="password" minlength="8" <%= isNew ? 'required' : '' %> autocomplete="new-password"></label>
+    <% if (!isNew) { %><label class="label flex items-center gap-2"><input type="checkbox" name="active" class="size-4 accent-brand-600" <%= u.active ? 'checked' : '' %>> Active</label><% } %>
+    <div class="flex items-center gap-4"><button class="btn">Save</button><a class="link" href="/manage/users">Cancel</a></div>
+  </form>
+</div>
+<%- include('../partials/foot') %>

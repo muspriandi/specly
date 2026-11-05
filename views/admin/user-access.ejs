@@ -1,0 +1,60 @@
+<%- include('../partials/head') %>
+<nav aria-label="Breadcrumb" class="mb-3 flex items-center gap-2 text-sm"><a class="link" href="/manage/users">Users</a><span class="text-slate-400" aria-hidden="true">/</span><span class="min-w-0 truncate font-medium" title="<%= u.email %>"><%= u.name %></span><span class="badge <%= u.role === 'admin' ? 'badge-info' : u.role === 'member' ? 'badge-ok' : 'badge-neutral' %>"><%= u.role %></span></nav>
+<h1 class="text-2xl font-bold">Blueprints this user can read</h1>
+<p class="mb-4 mt-1 text-sm text-slate-600 dark:text-slate-400"><%= u.email %> · <a class="link" href="/manage/users/<%= u.id %>/edit">Edit user</a></p>
+<% if (u.role === 'admin') { %>
+<div class="card"><p class="text-sm">Admins can read every blueprint, so there is nothing to assign. Change the role to member or guest to limit what this user sees.</p></div>
+<% } else { %>
+<div class="grid items-start gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+  <section aria-labelledby="readers-h" class="min-w-0">
+    <h2 id="readers-h" class="mb-2 font-semibold">Assigned <span class="text-sm font-normal text-slate-600 dark:text-slate-400">(<%= pg.total %><%= filter ? ' matching' : '' %>)</span></h2>
+    <%- include('../partials/list-search', { placeholder: 'Search by blueprint title', filter: filter }) %>
+    <% if (readers.length) { %>
+    <form id="bulk" method="post" action="/manage/users/<%= u.id %>/access/revoke" class="mb-3 flex flex-wrap items-center gap-2" data-confirm="<%= u.name %> will no longer be able to read the selected blueprints." data-confirm-title="Remove access to the selected blueprints?" data-confirm-action="Un-assign"><%- include('../partials/csrf') %>
+      <span class="text-sm text-slate-600 dark:text-slate-400" data-bulk-count aria-live="polite">0 selected</span>
+      <button class="btn btn-sm btn-danger" data-bulk-btn disabled>Un-assign selected</button>
+    </form>
+    <% } %>
+    <div class="card overflow-x-auto !p-0">
+      <% if (!readers.length) { %><div class="empty"><p><%= filter ? 'No assigned blueprints match your search.' : u.name + ' has no assigned blueprints yet.' %></p></div><% } else { %>
+      <table class="w-full text-sm">
+        <caption class="sr-only">Blueprints <%= u.name %> can read</caption>
+        <thead class="border-b border-slate-200 dark:border-slate-800"><tr><th scope="col" class="th w-10"><input type="checkbox" class="size-4 accent-brand-600" data-bulk-all aria-label="Select all blueprints on this page"></th><th scope="col" class="th">Blueprint</th><th scope="col" class="th">Version</th><th scope="col" class="th">Since</th><th scope="col" class="th"><span class="sr-only">Actions</span></th></tr></thead>
+        <% readers.forEach(function (r) { %>
+        <tr class="tr">
+          <td class="td"><input type="checkbox" class="size-4 accent-brand-600" name="bp" value="<%= r.id %>" form="bulk" data-bulk-row aria-label="Select <%= r.title %>"></td>
+          <td class="td"><a class="link" href="/blueprints/<%= r.id %>"><span class="clip font-medium" title="<%= r.title %>"><%= r.title %></span></a></td>
+          <td class="td"><%= r.version || '—' %></td>
+          <td class="td text-xs text-slate-600 dark:text-slate-400"><%= r.decided_at ? fmt(r.decided_at) : '—' %></td>
+          <td class="td"><form method="post" action="/manage/users/<%= u.id %>/access/<%= r.id %>/revoke" class="text-right" data-confirm="<%= u.name %> will no longer be able to read “<%= r.title %>”." data-confirm-title="Remove this access?" data-confirm-action="Un-assign"><%- include('../partials/csrf') %><button class="link-danger">Un-assign</button></form></td>
+        </tr>
+        <% }) %>
+      </table>
+      <% } %>
+    </div>
+    <%- include('../partials/pager', { pg: pg }) %>
+  </section>
+  <section aria-labelledby="assign-h" class="card min-w-0">
+    <h2 id="assign-h" class="font-semibold">Assign blueprints</h2>
+    <% if (!candidates.length) { %><p class="mt-2 text-sm text-slate-600 dark:text-slate-400">Every blueprint is already assigned. <a class="link" href="/manage/blueprints/new">Add a blueprint</a>.</p>
+    <% } else { %>
+    <form method="post" action="/manage/users/<%= u.id %>/access" class="mt-2"><%- include('../partials/csrf') %>
+      <input type="search" id="cand-filter" placeholder="Filter blueprints…" aria-label="Filter blueprints" class="field !mt-0 mb-2">
+      <div class="max-h-72 space-y-1 overflow-auto rounded-lg border border-slate-300 p-2 dark:border-slate-700">
+        <% candidates.forEach(function (c) { %>
+        <label data-cand="<%= c.title.toLowerCase() %>" class="flex items-center gap-2 rounded px-2 py-1 text-sm hover:bg-slate-100 dark:hover:bg-slate-800">
+          <input type="checkbox" name="bp" value="<%= c.id %>" class="size-4 shrink-0 accent-brand-600">
+          <span class="clip min-w-0 flex-1 font-medium" title="<%= c.title %>"><%= c.title %></span>
+          <% if (c.requested) { %><span class="badge badge-warn shrink-0">Requested</span><% } %><% if (c.version) { %><span class="badge badge-neutral shrink-0">v<%= c.version %></span><% } %>
+        </label>
+        <% }) %>
+      </div>
+      <% if (candidates.length === 500) { %><p class="hint mt-1">Showing the first 500 blueprints. Use the filter above.</p><% } %>
+      <button class="btn mt-3">Assign selected</button>
+    </form>
+    <% } %>
+  </section>
+</div>
+<script src="/static/access-filter.js"></script>
+<% } %>
+<%- include('../partials/foot') %>

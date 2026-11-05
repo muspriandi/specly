@@ -1,0 +1,48 @@
+<%- include('../partials/head') %>
+<h1 class="mb-1 text-2xl font-bold">Audit log</h1>
+<p class="mb-4 text-sm text-slate-600 dark:text-slate-400">Important activity only: sign-ins, account and password changes, invitations, access decisions and blueprint changes. Reading documentation is not logged.</p>
+<form method="get" class="mb-4 flex flex-wrap gap-2">
+  <input type="hidden" name="sort" value="<%= sort %>"><input type="hidden" name="dir" value="<%= dir %>">
+  <select name="group" aria-label="Event type" class="field !mt-0 !w-auto">
+    <option value="">All events</option>
+    <% groups.forEach(function (g) { %><option value="<%= g %>" <%= group === g ? 'selected' : '' %>><%= g %></option><% }) %>
+  </select>
+  <input class="field !mt-0 min-w-0 flex-1" type="search" name="q" value="<%= q %>" placeholder="Filter by person, action, detail or IP">
+  <select name="limit" aria-label="Events per page" class="field !mt-0 !w-auto">
+    <% limits.forEach(function (n) { %><option value="<%= n %>" <%= limit === n ? 'selected' : '' %>><%= n %> / page</option><% }) %>
+  </select>
+  <button class="btn">Filter</button>
+</form>
+<div class="card overflow-x-auto !p-0">
+<% if (!rows.length) { %><p class="p-5 text-sm text-slate-600 dark:text-slate-400">No events.</p><% } else { %>
+<table class="w-full text-sm">
+  <% var link = function (key, label) {
+       var next = sort === key && dir === (key === 'at' ? 'desc' : 'asc') ? (key === 'at' ? 'asc' : 'desc') : (key === 'at' ? 'desc' : 'asc');
+       return '?sort=' + key + '&dir=' + next + '&group=' + encodeURIComponent(group) + '&q=' + encodeURIComponent(q) + '&limit=' + limit;
+     }; %>
+  <thead class="border-b border-slate-200 dark:border-slate-800"><tr>
+    <% [['at','When'],['who','Who'],['action','Action'],['detail','Detail'],['ip','IP']].forEach(function (c) { %>
+    <th scope="col" class="th" aria-sort="<%= sort === c[0] ? (dir === 'asc' ? 'ascending' : 'descending') : 'none' %>"><a class="inline-flex items-center gap-1 hover:text-brand-600 dark:hover:text-brand-400" href="<%= link(c[0]) %>"><%= c[1] %><span aria-hidden="true"><%= sort === c[0] ? (dir === 'asc' ? '▲' : '▼') : '' %></span></a></th>
+    <% }) %>
+  </tr></thead>
+  <% rows.forEach(function (r) { %>
+  <tr class="tr" data-audit-id="<%= r.id %>">
+    <td class="td whitespace-nowrap text-xs text-slate-600 dark:text-slate-400"><%= fmt(r.at) %></td>
+    <td class="td"><span class="clip" title="<%= (r.actor_label || '—') %>"><%= (r.actor_label || '—') %></span></td>
+    <td class="td"><span class="badge font-mono <%= /failed|deleted|purged|revoked|rejected/.test(r.action) ? 'badge-bad' : 'badge-neutral' %>"><%= r.action %></span></td>
+    <td class="td"><span class="clip !max-w-md" title="<%= (r.detail || '') %>"><%= (r.detail || '') %></span></td>
+    <td class="td font-mono text-xs text-slate-600 dark:text-slate-400"><%= r.ip || '' %></td>
+  </tr>
+  <% }) %>
+</table>
+<% } %>
+</div>
+<% if (prev || next) { %>
+<nav class="mt-4 flex items-center justify-between text-sm" aria-label="Pagination">
+  <% var qs = function (param, cursor) { return '?' + param + '=' + cursor + '&sort=' + sort + '&dir=' + dir + '&group=' + encodeURIComponent(group) + '&q=' + encodeURIComponent(q) + '&limit=' + limit; }; %>
+  <% if (prev) { %><a class="link" rel="prev" href="<%= qs('before', prev) %>">← Previous</a><% } else { %><span></span><% } %>
+  <span class="text-slate-600 dark:text-slate-400"><%= rows.length %> event<%= rows.length === 1 ? '' : 's' %> shown</span>
+  <% if (next) { %><a class="link" rel="next" href="<%= qs('after', next) %>">Next →</a><% } else { %><span></span><% } %>
+</nav>
+<% } %>
+<%- include('../partials/foot') %>
