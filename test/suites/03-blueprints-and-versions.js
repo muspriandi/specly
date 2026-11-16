@@ -3,11 +3,13 @@ const log = require('../../src/lib/log');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const yaml = require('js-yaml');
 const { db, spec, upload, admin } = require('../support');
 
 test('blueprints accept YAML and JSON, reject garbage', async () => {
   assert.equal((await upload(admin, '/manage/blueprints', spec())).status, 302);
-  const json = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'openapi.json'));
+  // a JSON document, built from the sample in the repo (no files outside the repository: CI has none)
+  const json = JSON.stringify(yaml.load(fs.readFileSync(path.join(__dirname, '..', '..', 'samples', 'task-api.yaml'), 'utf8')));
   assert.equal((await upload(admin, '/manage/blueprints', json)).status, 302);
   const bad = await upload(admin, '/manage/blueprints', 'hello: world');
   assert.equal(bad.status, 400);

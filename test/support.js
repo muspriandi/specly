@@ -78,14 +78,26 @@ after(async () => {
   const url = new URL(process.env.DATABASE_URL); url.pathname = '/postgres';
   const admin = new Pg({ connectionString: url.toString() });
   await admin.connect();
-  await admin.query(`DROP DATABASE IF EXISTS "${dbName}" WITH (FORCE)`);
+  await dropDatabase(admin, dbName);
   await admin.end();
 });
 
 const admin = new Client(), guest = new Client();
 
 
+// Drops a database once the server has really closed every connection to it. pool.end() returns before the backends are gone,
+// and DROP DATABASE ... WITH (FORCE) would then kill a connection the client already closed: that late "terminating
+// connection" error lands on a client with no listener and fails whichever test is running (seen on PostgreSQL 16 in CI).
+async function dropDatabase(admin, name) {
+  for (let i = 0; i < 100; i++) {
+    const { rows } = await admin.query('SELECT 1 FROM pg_stat_activity WHERE datname=$1 AND pid <> pg_backend_pid()', [name]);
+    if (!rows.length) break;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  await admin.query(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`);
+}
+
 // Absolute URL of the app under test (the port is chosen when the harness starts).
 const url = (p) => origin + p;
 
-module.exports = { db, Client, spec, upload, lastMailLink, mails, flushMail, admin, guest, url };
+module.exports = { db, Client, spec, upload, lastMailLink, mails, flushMail, admin, guest, url, dropDatabase };
