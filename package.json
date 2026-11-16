@@ -5,13 +5,14 @@
   "scripts": {
     "test": "node --test --test-concurrency=1 test/e2e.test.js test/viewer.test.js test/browser.test.js",
     "start": "node server.js",
-    "reset-admin": "node scripts/reset-admin.js",
     "build:css": "tailwindcss -i src/input.css -o public/app.css --minify",
     "watch:css": "tailwindcss -i src/input.css -o public/app.css --watch",
     "prestart": "npm run build:css",
     "dev": "npm run build:css && node --watch server.js",
+    "migrate": "node scripts/migrate.js",
+    "migrate:status": "node scripts/migrate.js status",
+    "migrate:new": "node scripts/migrate.js new",
     "seed": "node scripts/seed.js",
-    "seed:users": "node scripts/seed-users.js",
     "backup": "node scripts/backup.js",
     "lint": "eslint ."
   },

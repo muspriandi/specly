@@ -1,25 +1,19 @@
-const crypto = require('crypto');
-const fs = require('fs');
-const path = require('path');
 const config = require('./config');
 const db = require('./db');
-const auth = require('./services/auth');
-const { saveBlueprint } = require('./services/blueprints');
+const log = require('./lib/log');
+const seed = require('./seed');
 const { parseSpec, listEndpoints } = require('./services/spec');
 
-const SAMPLE = path.join(__dirname, '..', 'samples', 'task-api.yaml');
-
-// First run only: create an admin account and a sample blueprint.
+// Runs on every start: on the very first one (empty database) it creates the admin and a sample blueprint
+// (see src/seed.js; AUTO_SEED=false turns that off, `npm run seed` does it on demand), then fills in data for older databases.
 async function bootstrap() {
-  if (!(await db.one('SELECT 1 FROM users LIMIT 1'))) {
-    const { email, password: configured } = config.admin;
-    const password = configured || crypto.randomBytes(9).toString('base64url');
-    await db.query(`INSERT INTO users (email,name,password_hash,role) VALUES ($1,'Administrator',$2,'admin')`,
-      [email, await auth.hashPassword(password)]);
-    console.log(`\nCreated admin account: ${email}${configured ? ' (password from ADMIN_PASSWORD)' : ` / ${password}  (shown once; or run: npm run reset-admin)`}\n`);
-  }
-  if (!(await db.one('SELECT 1 FROM blueprints LIMIT 1')) && fs.existsSync(SAMPLE)) {
-    await saveBlueprint(null, fs.readFileSync(SAMPLE, 'utf8'), null);
+  if (config.autoSeed) {
+    const first = await seed.firstRun();
+    if (first.admin && first.admin.created) {
+      // The one place a credential is printed: on the very first start, and only when no ADMIN_PASSWORD was set.
+      console.log(`\nCreated admin account: ${first.admin.email}${first.admin.generated ? ` / ${first.admin.password}  (generated: shown once, change it after signing in)` : ' (password from ADMIN_PASSWORD)'}\n`);
+      log.info('first start: created the admin account', { event: 'seed.admin_created', email: log.maskEmail(first.admin.email) });
+    }
   }
   await backfillDeprecated();
   await backfillStatus();

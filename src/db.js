@@ -1,5 +1,3 @@
-const fs = require('fs');
-const path = require('path');
 const { Pool, Client } = require('pg');
 const config = require('./config');
 const log = require('./lib/log');
@@ -64,21 +62,17 @@ async function ensureDatabase() {
   }
 }
 
-// Several instances may start at once: an advisory lock makes them take turns, so the migration blocks never race.
-// The schema runs without the statement timeout (an index build on a big table may legitimately take a while).
-const SCHEMA_LOCK = 727274;
+// Brings the schema up to date (see src/migrate.js). With AUTO_MIGRATE=false the server only checks: it refuses to start
+// while migrations are pending, so they can be applied deliberately with `npm run migrate` (for example before a deploy).
 async function init() {
   await ensureDatabase();
-  const client = await pool.connect();
-  try {
-    await client.query('SET statement_timeout = 0');
-    await client.query('SELECT pg_advisory_lock($1)', [SCHEMA_LOCK]);
-    try { await client.query(fs.readFileSync(path.join(__dirname, '..', 'db', 'schema.sql'), 'utf8')); }
-    finally { await client.query('SELECT pg_advisory_unlock($1)', [SCHEMA_LOCK]); }
-  } finally {
-    await client.query('RESET statement_timeout').catch(() => {});
-    client.release();
+  const migrate = require('./migrate');
+  if (config.autoMigrate) {
+    await migrate.up(pool);
+    return;
   }
+  const pending = (await migrate.status(pool)).filter((m) => !m.applied);
+  if (pending.length) throw new Error(`${pending.length} pending migration(s): ${pending.map((m) => m.file).join(', ')}. Run: npm run migrate`);
 }
 
 // True when the database answers a trivial query (used by /healthz).
@@ -103,4 +97,4 @@ async function purgeExpired() {
 const UNIQUE_VIOLATION = '23505';
 const isUniqueViolation = (e) => e && e.code === UNIQUE_VIOLATION;
 
-module.exports = { query, one, tx, init, ping, purgeExpired, isUniqueViolation, pool };
+module.exports = { query, one, tx, init, ensureDatabase, ping, purgeExpired, isUniqueViolation, pool };

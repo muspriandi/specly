@@ -11,6 +11,8 @@ const config = Object.freeze({
   baseUrl,
   databaseUrl: env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/specly',
   trustProxy: env.TRUST_PROXY === 'true',
+  autoMigrate: env.AUTO_MIGRATE !== 'false', // apply pending migrations on start (false: refuse to start until `npm run migrate`)
+  autoSeed: env.AUTO_SEED !== 'false',       // on the very first start (no users yet) create the admin and a sample blueprint
   loginRateMax: Number(env.LOGIN_RATE_MAX || 30), // sign-in attempts per IP per 15 minutes
   db: {
     poolMax: Number(env.DB_POOL_MAX || 10),

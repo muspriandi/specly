@@ -11,3 +11,4 @@ require('./suites/07-invitations-edit-and-ops');
 require('./suites/08-sharing-and-account-security');
 require('./suites/09-manage-lists-and-trash');
 require('./suites/10-logging');
+require('./suites/11-migrations-and-seeds');

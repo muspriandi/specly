@@ -1,4 +1,7 @@
--- Idempotent: safe to run on every start.
+-- 001 baseline: the schema as it stood when migrations were introduced.
+-- Every statement is idempotent, so this is also safe on a database that was created by the old schema.sql: it changes
+-- nothing there and simply gets recorded as applied. New changes go in new files (002_*.sql, 003_*.sql, ...):
+-- see `npm run migrate:new -- <name>` and the "Database migrations" section of the README. Never edit an applied migration.
 
 CREATE TABLE IF NOT EXISTS users (
   id SERIAL PRIMARY KEY,
