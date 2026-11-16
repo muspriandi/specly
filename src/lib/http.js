@@ -21,6 +21,17 @@ const readFlash = (raw) => {
   return { type: FLASH_TYPES.includes(type) ? type : 'success', message, undo };
 };
 
+// Post/Redirect/Get for results that must be shown once (invitation results, recovery codes): the POST stores the result in
+// a short-lived httpOnly cookie scoped to the page that shows it and redirects there; the first GET reads it and clears it.
+// Refreshing therefore re-shows nothing and, above all, never re-submits the form.
+const setOnce = (res, name, value, path) => res.cookie(name, JSON.stringify(value), { ...cookieBase, path, maxAge: 5 * 60 * 1000 });
+function takeOnce(req, res, name, path) {
+  const raw = req.cookies && req.cookies[name];
+  if (!raw) return null;
+  res.clearCookie(name, { ...cookieBase, path });
+  try { const v = JSON.parse(raw); return v && typeof v === 'object' ? v : null; } catch { return null; }
+}
+
 // Error pages.
 const errorPage = (res, status, title, message) => res.status(status).render('error', { title, message });
 const notFound = (res, message = 'Page not found.') => errorPage(res, 404, 'Not found', message);
@@ -43,4 +54,4 @@ const load = (fetcher, label = 'Item') => async (req, res, next) => {
   next();
 };
 
-module.exports = { cookieBase, sessionCookie, flash, readFlash, errorPage, notFound, badLink, baseUrl, numericParam, load };
+module.exports = { setOnce, takeOnce, cookieBase, sessionCookie, flash, readFlash, errorPage, notFound, badLink, baseUrl, numericParam, load };

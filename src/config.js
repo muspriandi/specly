@@ -36,6 +36,7 @@ const config = Object.freeze({
     user: env.SMTP_USER || null,
     pass: env.SMTP_PASS || null,
     from: env.MAIL_FROM || 'Specly <no-reply@specly.local>',
+    notify: env.NOTIFY_EMAILS !== 'false', // emails about access requests and assignments (invitations and resets always send)
   },
 });
 

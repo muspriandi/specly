@@ -3,6 +3,7 @@ const db = require('../../db');
 const { audit } = require('../../services/audit');
 const { flash } = require('../../lib/http');
 const { paginate, limitSql } = require('../../lib/paginate');
+const { notifyAccessGranted } = require('../../services/notify');
 
 const FROM = `
   FROM access_requests r JOIN users u ON u.id=r.user_id AND u.deleted_at IS NULL JOIN blueprints b ON b.id=r.blueprint_id AND b.deleted_at IS NULL
@@ -25,6 +26,7 @@ const decide = ({ from, to, event, message, verb }) => async (req, res) => {
   if (r) {
     const info = await db.one(`SELECT u.email, b.title FROM users u, blueprints b WHERE u.id=$1 AND b.id=$2 AND u.deleted_at IS NULL AND b.deleted_at IS NULL`, [r.user_id, r.blueprint_id]);
     await audit(req, `request.${event}`, { type: 'blueprint', id: r.blueprint_id, detail: `${verb(info.email, info.title)}` });
+    if (to === 'approved') notifyAccessGranted(req, [info]);
   }
   flash(res, r ? message : 'That request was already handled.', r ? 'success' : 'info');
   res.redirect('/manage/requests');
@@ -45,6 +47,7 @@ router.post('/bulk', async (req, res) => {
     await audit(req, approve ? 'request.approved' : 'request.rejected', { type: 'blueprint', id: r.blueprint_id,
       detail: `${approve ? 'Approved' : 'Rejected'} ${r.email}'s request to read "${r.title}" (bulk)` });
   }
+  if (approve) notifyAccessGranted(req, rows);
   flash(res, `${rows.length} request${rows.length === 1 ? '' : 's'} ${approve ? 'approved' : 'rejected'}.`);
   res.redirect('/manage/requests');
 });

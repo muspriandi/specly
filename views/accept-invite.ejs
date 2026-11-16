@@ -1,7 +1,7 @@
 <%- include('partials/head') %>
 <div class="card mx-auto mt-10 max-w-sm sm:mt-20">
   <h1 class="text-xl font-bold">Accept invitation</h1>
-  <p class="mb-4 mt-1 text-sm text-slate-600 dark:text-slate-400">Create your guest account for <strong><%= email %></strong>.</p>
+  <p class="mb-4 mt-1 text-sm text-slate-600 dark:text-slate-400">Create your <%= role %> account for <strong><%= email %></strong>.</p>
   <% if (typeof error !== 'undefined') { %><div class="alert-error"><%= error %></div><% } %>
   <form method="post"><%- include('partials/csrf') %>
     <label class="label">Your name <input class="field" name="name" value="<%= typeof name !== 'undefined' ? name : '' %>" required autofocus></label>

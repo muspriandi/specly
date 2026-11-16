@@ -46,12 +46,12 @@ const requireAdmin = (req, res, next) => {
 };
 
 // ---- one-time tokens (invite / reset); only a hash is stored ----
-async function issueToken({ type, email, userId = null, invitedBy = null, ttlHours }) {
+async function issueToken({ type, email, userId = null, invitedBy = null, ttlHours, role = null, blueprintIds = null }) {
   const token = newToken();
   await db.tx(async (q) => {
     await q('DELETE FROM tokens WHERE type=$1 AND email=$2', [type, email]); // newest link wins
-    await q(`INSERT INTO tokens (token_hash,type,email,user_id,invited_by,expires_at) VALUES ($1,$2,$3,$4,$5,$6)`,
-      [sha(token), type, email, userId, invitedBy, new Date(Date.now() + ttlHours * 3600 * 1000)]);
+    await q(`INSERT INTO tokens (token_hash,type,email,user_id,invited_by,expires_at,role,blueprint_ids) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [sha(token), type, email, userId, invitedBy, new Date(Date.now() + ttlHours * 3600 * 1000), role, blueprintIds]);
   });
   return token;
 }

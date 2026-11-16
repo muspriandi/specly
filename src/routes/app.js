@@ -3,6 +3,7 @@ const db = require('../db');
 const { requireLogin } = require('../services/auth');
 const { canView, blueprintsFor } = require('../services/access');
 const { audit } = require('../services/audit');
+const { notifyAdminsOfRequest } = require('../services/notify');
 const { getBlueprint } = require('../services/blueprints');
 const { flash, notFound, errorPage, numericParam } = require('../lib/http');
 const { text } = require('../lib/validate');
@@ -109,6 +110,7 @@ router.post('/blueprints/:id/request', async (req, res) => {
     const msg = text(req.body.message, 120);
     await audit(req, 'request.created', { type: 'blueprint', id: bp.id,
       detail: `Requested access to "${bp.title}"${msg ? ` — "${msg}"` : ''}` });
+    await notifyAdminsOfRequest(req, req.user, bp, msg);
     flash(res, `Access to "${bp.title}" requested. An admin will review it.`);
   }
   res.redirect('/');

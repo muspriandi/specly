@@ -1,7 +1,7 @@
 <%- include('../partials/head') %>
 <h1 class="mb-4 text-2xl font-bold">Invitations</h1>
 <div class="card max-w-2xl">
-  <p class="mb-4 text-sm text-slate-600 dark:text-slate-400">Each guest receives an email with a link (valid 72 hours) to create their account. After that they can request access to blueprints.</p>
+  <p class="mb-4 text-sm text-slate-600 dark:text-slate-400">Each person receives an email with a link (valid 72 hours) to create their account, with the role and blueprints you choose below. Blueprints you pick are ready as soon as they sign in.</p>
   <% if (typeof error !== 'undefined') { %><div class="alert-error"><%= error %></div><% } %>
   <form method="post" action="/manage/invites"><%- include('../partials/csrf') %>
     <label class="label">Email addresses
@@ -9,7 +9,24 @@
     </label>
     <div id="invite-chips" class="mb-3 flex flex-wrap gap-1.5" aria-live="polite"></div>
     <p class="mb-4 text-xs text-slate-600 dark:text-slate-400">Separate with new lines, commas or semicolons. Up to <%= maxBatch %> at a time.</p>
-    <button class="btn">Send invitations</button>
+    <label class="label">Role
+      <select class="field" name="role">
+        <option value="guest" <%= role === 'guest' ? 'selected' : '' %>>Guest — reads assigned blueprints only</option>
+        <option value="member" <%= role === 'member' ? 'selected' : '' %>>Member — reads assigned blueprints, can request others</option>
+      </select>
+    </label>
+    <div class="mb-4" data-tag-picker data-src="/manage/invites/blueprint-options" data-name="bp" data-min="3">
+      <label class="label !mb-1" for="bp-input">Blueprints to assign <span class="font-normal text-slate-600 dark:text-slate-400">(optional)</span></label>
+      <div class="relative">
+        <div class="field flex min-h-10 flex-wrap items-center gap-1.5 !py-1.5 focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/30" data-tags>
+          <% pickedBlueprints.forEach(function (b) { %><span class="chip" data-tag><input type="hidden" name="bp" value="<%= b.id %>"><span class="max-w-56 truncate" title="<%= b.title %>"><%= b.title %></span><button type="button" aria-label="Remove <%= b.title %>">×</button></span><% }) %>
+          <input id="bp-input" type="text" autocomplete="off" class="min-w-[12ch] flex-1 border-0 bg-transparent p-0 text-sm outline-none placeholder:text-slate-500" placeholder="Type at least 3 letters of a blueprint name…" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="bp-options">
+        </div>
+        <div id="bp-options" role="listbox" aria-label="Matching blueprints" hidden class="absolute inset-x-0 top-full z-20 mt-1 max-h-64 overflow-auto rounded-lg border border-slate-200 bg-white p-1 shadow-lg dark:border-slate-700 dark:bg-slate-900"></div>
+      </div>
+      <p class="hint" data-tag-status aria-live="polite">The person can read these as soon as they sign in. Shows the 5 best matches.</p>
+    </div>
+    <button class="btn"><%- icon('send') %>Send invitations</button>
   </form>
 </div>
 <% if (typeof result !== 'undefined') { %>
@@ -25,13 +42,13 @@
 <% } %>
 <h2 class="mb-3 mt-8 text-lg font-semibold">Pending invitations</h2>
 <%- include('../partials/list-search', { placeholder: 'Search by email', filter: filter }) %>
-<div class="card overflow-x-auto !p-0">
-<% if (!pending.length) { %><div class="empty"><p><%= filter ? 'No invitations match “' + filter + '”.' : 'No pending invitations.' %></p></div><% } else { %>
+<div class="card max-md:overflow-x-auto sticky-head !p-0">
+<% if (!pending.length) { %><div class="empty"><%- icon('mail', 'size-8') %><p class="font-medium text-slate-800 dark:text-slate-200"><%= filter ? 'No invitations match “' + filter + '”.' : 'No pending invitations' %></p><% if (!filter) { %><p>Invitations you send above wait here until the guest accepts.</p><% } %></div><% } else { %>
 <table class="w-full text-sm">
-  <thead class="border-b border-slate-200 dark:border-slate-800"><tr><th scope="col" class="th">Email</th><th scope="col" class="th">Invited by</th><th scope="col" class="th">Sent</th><th scope="col" class="th">Status</th></tr></thead>
+  <thead class="border-b border-slate-200 dark:border-slate-800"><tr><th scope="col" class="th">Email</th><th scope="col" class="th">Role</th><th scope="col" class="th">Blueprints</th><th scope="col" class="th">Invited by</th><th scope="col" class="th">Sent</th><th scope="col" class="th">Status</th></tr></thead>
   <% pending.forEach(function (p) { %>
   <tr class="tr">
-    <td class="td"><span class="clip" title="<%= p.email %>"><%= p.email %></span></td><td class="td"><span class="clip" title="<%= (p.invited_by || '—') %>"><%= (p.invited_by || '—') %></span></td>
+    <td class="td"><span class="clip" title="<%= p.email %>"><%= p.email %></span></td><td class="td"><span class="badge <%= p.role === 'member' ? 'badge-ok' : 'badge-neutral' %>"><%= p.role || 'guest' %></span></td><td class="td"><%= p.blueprint_count || '—' %></td><td class="td"><span class="clip" title="<%= (p.invited_by || '—') %>"><%= (p.invited_by || '—') %></span></td>
     <td class="td text-xs text-slate-600 dark:text-slate-400"><%= fmt(p.created_at) %></td>
     <td class="td"><span class="badge <%= p.expired ? 'border-red-400 text-red-600' : 'border-amber-500 text-amber-700 dark:text-amber-400' %>"><%= p.expired ? 'Expired' : 'Waiting' %></span></td>
   </tr>

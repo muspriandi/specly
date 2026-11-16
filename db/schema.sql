@@ -27,6 +27,24 @@ CREATE TABLE IF NOT EXISTS tokens (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Two-factor sign-in (TOTP). totp_secret with no totp_enabled_at is a setup that was started but not confirmed.
+-- recovery_codes holds hashes of the unused single-use codes; totp_last_step stops a code being used twice.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_secret TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_enabled_at TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_last_step BIGINT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS recovery_codes TEXT[];
+-- A password-correct login that still needs its second factor waits here for a few minutes (type 'login2fa').
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid='tokens'::regclass AND conname='tokens_type_check' AND pg_get_constraintdef(oid) LIKE '%login2fa%') THEN
+    ALTER TABLE tokens DROP CONSTRAINT IF EXISTS tokens_type_check;
+    ALTER TABLE tokens ADD CONSTRAINT tokens_type_check CHECK (type IN ('invite','reset','login2fa'));
+  END IF;
+END $$;
+
+-- An invitation can also carry the role the new account gets and the blueprints assigned to it on acceptance.
+ALTER TABLE tokens ADD COLUMN IF NOT EXISTS role TEXT CHECK (role IN ('member','guest'));
+ALTER TABLE tokens ADD COLUMN IF NOT EXISTS blueprint_ids INT[];
+
 CREATE TABLE IF NOT EXISTS blueprints (
   id SERIAL PRIMARY KEY,
   title TEXT NOT NULL,

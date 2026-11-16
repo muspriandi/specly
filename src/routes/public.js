@@ -83,13 +83,14 @@ router.post('/reset/:token', resetToken, async (req, res) => {
 // ---- Accept a guest invitation ----
 const inviteToken = auth.requireToken('invite', 'Invitation expired', 'This invitation is invalid or has expired. Ask an admin to send a new one.');
 router.get('/invite/:token', inviteToken, (req, res) =>
-  res.render('accept-invite', { title: 'Accept invitation', email: req.token.email }));
+  res.render('accept-invite', { title: 'Accept invitation', email: req.token.email, role: req.token.role || 'guest' }));
 
 router.post('/invite/:token', inviteToken, async (req, res) => {
   const name = text(req.body.name, 100);
   const email = req.token.email.toLowerCase();
   const err = firstError(!name && 'Name is required.', passwordError(req.body.password, req.body.confirm));
-  if (err) return res.status(400).render('accept-invite', { title: 'Accept invitation', email, error: err, name });
+  const role = req.token.role || 'guest';
+  if (err) return res.status(400).render('accept-invite', { title: 'Accept invitation', email, role, error: err, name });
 
   let user;
   try {
@@ -103,9 +104,12 @@ router.post('/invite/:token', inviteToken, async (req, res) => {
     throw e;
   }
   if (!user) return badLink(res, 'Invitation expired', 'This invitation is invalid or has expired.');
-  await audit(req, 'invite.accepted', { actor: { id: user.id, email }, type: 'user', id: user.id, detail: `Accepted the invitation and created a guest account (${name})` });
-  await auth.startSession(res, user.id);
-  flash(res, 'Welcome! Request access to the blueprints you need.');
+  const assigned = req.token.blueprint_ids && req.token.blueprint_ids.length
+    ? await access.grant([user.id], req.token.blueprint_ids, req.token.invited_by) : [];
+  await audit(req, 'invite.accepted', { actor: { id: user.id, email }, type: 'user', id: user.id,
+    detail: `Accepted the invitation and created a ${role} account (${name})${assigned.length ? `; assigned ${assigned.map((a) => `"${a.title}"`).join(', ')}` : ''}` });
+  await auth.startSession(res, user.id, req);
+  flash(res, role === 'member' ? 'Welcome! Request access to the blueprints you need.' : assigned.length ? 'Welcome! Your blueprints are ready.' : 'Welcome! An admin will assign blueprints to you.');
   res.redirect('/');
 });
 

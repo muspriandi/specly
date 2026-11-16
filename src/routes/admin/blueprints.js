@@ -8,6 +8,8 @@ const { lintSpec } = require('../../services/lint');
 const { flash, notFound, baseUrl, cookieBase } = require('../../lib/http');
 const trash = require('../../services/trash');
 const access = require('../../services/access');
+const shares = require('../../services/shares');
+const { notifyAccessGranted } = require('../../services/notify');
 const { text } = require('../../lib/validate');
 const { paginate, limitSql, likeOf, sortOf } = require('../../lib/paginate');
 
@@ -173,6 +175,7 @@ router.post('/:id/access', async (req, res) => {
   if (!bp) return notFound(res, 'Blueprint not found.');
   const done = await access.grant([].concat(req.body.users || []), [bp.id], req.user.id);
   if (done.length) await audit(req, 'blueprint.access_changed', { type: 'blueprint', id: bp.id, detail: `Assigned "${bp.title}" to ${list(done)}` });
+  notifyAccessGranted(req, done);
   flash(res, done.length ? `Assigned to ${plural(done.length, 'user')}.` : 'Select at least one user to assign.', done.length ? 'success' : 'error');
   res.redirect(back(req));
 });

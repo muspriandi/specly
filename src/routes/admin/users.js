@@ -6,6 +6,8 @@ const { audit } = require('../../services/audit');
 const { flash, notFound } = require('../../lib/http');
 const { paginate, limitSql, likeOf, sortOf } = require('../../lib/paginate');
 const access = require('../../services/access');
+const { isLastActiveAdmin, LastAdminError } = require('../../services/admins');
+const { notifyAccessGranted } = require('../../services/notify');
 const { ROLES, normEmail, isEmail, text, passwordError, firstError } = require('../../lib/validate');
 
 const getUser = (id) => db.one('SELECT id,email,name,role,active FROM users WHERE id=$1 AND deleted_at IS NULL', [id]);
@@ -80,6 +82,7 @@ router.post('/:id/access', async (req, res) => {
   if (!u) return notFound(res, 'User not found.');
   const done = await access.grant([u.id], [].concat(req.body.bp || []), req.user.id);
   if (done.length) await audit(req, 'user.access_changed', { type: 'user', id: u.id, detail: `Assigned ${titles(done)} to ${u.email}` });
+  notifyAccessGranted(req, done);
   flash(res, done.length ? `Assigned ${plural(done.length, 'blueprint')}.` : 'Select at least one blueprint to assign.', done.length ? 'success' : 'error');
   res.redirect(backTo(req));
 });
