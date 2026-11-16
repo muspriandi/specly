@@ -4,6 +4,7 @@ const db = require('./src/db');
 const { createApp } = require('./src/app');
 const { bootstrap } = require('./src/bootstrap');
 const { flushMail } = require('./src/services/mail');
+const trash = require('./src/services/trash');
 
 // Where the database is, without credentials, for the startup line.
 function dbTarget() {
@@ -13,8 +14,13 @@ function dbTarget() {
 async function main() {
   await db.init();
   await bootstrap();
-  await db.purgeExpired();
-  const purge = setInterval(() => db.purgeExpired().catch((e) => log.error('purge failed', { event: 'db.purge_failed', err: e })), 3600 * 1000);
+  const housekeeping = async () => {
+    await db.purgeExpired();
+    const gone = await trash.purgeOld(config.trashRetentionDays);
+    if (gone.blueprints + gone.users) log.info('emptied the trash', { event: 'trash.purged', ...gone, days: config.trashRetentionDays });
+  };
+  await housekeeping();
+  const purge = setInterval(() => housekeeping().catch((e) => log.error('purge failed', { event: 'db.purge_failed', err: e })), 3600 * 1000);
   purge.unref();
 
   const server = createApp().listen(config.port, () => {

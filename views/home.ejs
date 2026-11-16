@@ -7,7 +7,7 @@
   </div>
   <% if (blueprints.length > 1) { %>
   <div class="flex flex-wrap items-center gap-2" role="group" aria-label="Filter blueprints">
-    <input type="search" id="bp-filter" placeholder="Filter blueprints…" aria-label="Filter blueprints" class="field !mt-0 !w-48">
+    <form method="get" role="search" class="contents"><input type="search" id="bp-filter" name="q" value="<%= homeQ %>" placeholder="Filter blueprints…" aria-label="Filter blueprints (press Enter to search them all)" class="field !mt-0 !w-48"></form>
     <% if (blueprints.some(function (b) { return b.access !== 'granted'; })) { %>
     <button type="button" class="badge badge-neutral cursor-pointer aria-pressed:border-brand-600 aria-pressed:bg-brand-50 aria-pressed:text-brand-700 dark:aria-pressed:bg-slate-800 dark:aria-pressed:text-brand-400" id="bp-mine" aria-pressed="false">Only mine</button>
     <% } %>
@@ -24,7 +24,7 @@
     </ol>
   </section>
 <% } %>
-<% if (!blueprints.length) { %>
+<% if (!blueprints.length && !homeQ) { %>
   <div class="card mt-4 !p-0"><div class="empty">
     <%- icon('inbox', 'size-8') %>
     <% if (user.role === 'admin') { %><p>No blueprints yet. Upload an OpenAPI or Swagger file to publish your first API.</p><a class="btn" href="/manage/blueprints/new">Add the first blueprint</a>
@@ -35,5 +35,7 @@
   <% blueprints.forEach(function (b) { %><div data-bp="<%= (b.title + ' ' + (b.description || '')).toLowerCase().slice(0, 300) %>" data-granted="<%= b.access === 'granted' %>" class="contents"><%- include('partials/bp-card', { b }) %></div><% }) %>
 </div>
 <p id="bp-none" class="card mt-4 hidden text-sm text-slate-600 dark:text-slate-400">No blueprints match your filter.</p>
+<% if (homeQ && !blueprints.length) { %><p class="card mt-4 text-sm text-slate-600 dark:text-slate-400">No blueprints match “<%= homeQ %>”. <a class="link" href="/">Show all</a></p><% } %>
+<% if (pg.pages > 1) { %><%- include('partials/pager', { pg: pg }) %><% } %>
 <script src="/static/home.js"></script>
 <%- include('partials/foot') %>

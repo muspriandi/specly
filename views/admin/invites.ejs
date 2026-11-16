@@ -45,12 +45,16 @@
 <div class="card max-md:overflow-x-auto sticky-head !p-0">
 <% if (!pending.length) { %><div class="empty"><%- icon('mail', 'size-8') %><p class="font-medium text-slate-800 dark:text-slate-200"><%= filter ? 'No invitations match “' + filter + '”.' : 'No pending invitations' %></p><% if (!filter) { %><p>Invitations you send above wait here until the guest accepts.</p><% } %></div><% } else { %>
 <table class="w-full text-sm">
-  <thead class="border-b border-slate-200 dark:border-slate-800"><tr><th scope="col" class="th">Email</th><th scope="col" class="th">Role</th><th scope="col" class="th">Blueprints</th><th scope="col" class="th">Invited by</th><th scope="col" class="th">Sent</th><th scope="col" class="th">Status</th></tr></thead>
+  <thead class="border-b border-slate-200 dark:border-slate-800"><tr><th scope="col" class="th">Email</th><th scope="col" class="th">Role</th><th scope="col" class="th">Blueprints</th><th scope="col" class="th">Invited by</th><th scope="col" class="th">Sent</th><th scope="col" class="th">Status</th><th scope="col" class="th"><span class="sr-only">Actions</span></th></tr></thead>
   <% pending.forEach(function (p) { %>
   <tr class="tr">
     <td class="td"><span class="clip" title="<%= p.email %>"><%= p.email %></span></td><td class="td"><span class="badge <%= p.role === 'member' ? 'badge-ok' : 'badge-neutral' %>"><%= p.role || 'guest' %></span></td><td class="td"><%= p.blueprint_count || '—' %></td><td class="td"><span class="clip" title="<%= (p.invited_by || '—') %>"><%= (p.invited_by || '—') %></span></td>
     <td class="td text-xs text-slate-600 dark:text-slate-400"><%= fmt(p.created_at) %></td>
     <td class="td"><span class="badge <%= p.expired ? 'border-red-400 text-red-600' : 'border-amber-500 text-amber-700 dark:text-amber-400' %>"><%= p.expired ? 'Expired' : 'Waiting' %></span></td>
+    <td class="td"><div class="flex items-center justify-end gap-3 whitespace-nowrap">
+      <form method="post" action="/manage/invites/<%= p.id %>/resend"><%- include('../partials/csrf') %><button class="link">Resend</button></form>
+      <form method="post" action="/manage/invites/<%= p.id %>/revoke" data-confirm="The link in the email stops working." data-confirm-title="Revoke the invitation for <%= p.email %>?" data-confirm-action="Revoke"><%- include('../partials/csrf') %><button class="link-danger">Revoke</button></form>
+    </div></td>
   </tr>
   <% }) %>
 </table>

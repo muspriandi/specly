@@ -41,7 +41,9 @@ async function seedSamples({ dir = SAMPLES_DIR, only = null } = {}) {
     try {
       const { spec } = parseSpec(text);
       const title = spec.info.title.trim();
-      if (existing.has(title.toLowerCase())) { out.push({ file, title, status: 'skipped' }); continue; }
+      // Already there under this title, or under a new one after being renamed (some revision of a live blueprint is this very file).
+      const renamed = await db.one(`SELECT 1 FROM blueprint_versions v JOIN blueprints b ON b.id=v.blueprint_id AND b.deleted_at IS NULL WHERE v.source = $1 LIMIT 1`, [text.replace(/\r\n?/g, '\n')]);
+      if (existing.has(title.toLowerCase()) || renamed) { out.push({ file, title, status: 'skipped' }); continue; }
       const saved = await saveBlueprint(null, text, adminId, 'Seeded sample');
       existing.add(title.toLowerCase());
       out.push({ file, title, version: spec.info.version, endpoints: saved.endpointCount, status: 'added' });

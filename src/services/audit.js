@@ -17,11 +17,13 @@ const STORED = new Set([
   'request.approved', 'request.rejected', 'request.revoked',
   // destructive or reverting content actions
   'blueprint.deleted', 'blueprint.restored', 'blueprint.purged',
+  // sensitive reads
+  'audit.exported',
   // credentials
   'auth.password_changed', 'auth.password_reset', 'auth.2fa_enabled', 'auth.2fa_disabled', 'auth.2fa_codes_renewed',
 ]);
 // Not stored (log only): auth.login (admin sign-ins are stored, see the call site), auth.sessions_ended,
-// request.created, invite.sent, invite.email_failed, blueprint.created, blueprint.updated.
+// request.created, invite.sent, invite.email_failed, invite.revoked, blueprint.created, blueprint.updated.
 
 const STORED_DETAIL = 300; // characters kept in the table; the log line keeps up to 800
 

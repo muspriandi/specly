@@ -12,6 +12,7 @@ const config = Object.freeze({
   databaseUrl: env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/specly',
   trustProxy: env.TRUST_PROXY === 'true',
   sessionIdleHours: env.SESSION_IDLE_HOURS === undefined || env.SESSION_IDLE_HOURS === '' ? 24 : Math.max(0, Number(env.SESSION_IDLE_HOURS)), // 0 = no idle timeout
+  trashRetentionDays: env.TRASH_RETENTION_DAYS === undefined || env.TRASH_RETENTION_DAYS === '' ? 30 : Math.max(0, Number(env.TRASH_RETENTION_DAYS)), // deleted items are removed for good after this many days (0 = never)
   appSecret: env.APP_SECRET || null, // encrypts two-factor secrets at rest (required in production): openssl rand -base64 32
   bcryptCost: Math.min(15, Math.max(4, Number(env.BCRYPT_COST || 12))),
   autoMigrate: env.AUTO_MIGRATE !== 'false', // apply pending migrations on start (false: refuse to start until `npm run migrate`)

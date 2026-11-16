@@ -51,4 +51,18 @@ async function restoreUser(id) {
 const purgeBlueprint = async (id) => (await db.query('DELETE FROM blueprints WHERE id=$1 AND deleted_at IS NOT NULL RETURNING title, version', [id]))[0] || null;
 const purgeUser = async (id) => (await db.query('DELETE FROM users WHERE id=$1 AND deleted_at IS NOT NULL RETURNING email, name, role', [id]))[0] || null;
 
-module.exports = { deleteBlueprint, restoreBlueprint, deleteUser, restoreUser, purgeBlueprint, purgeUser };
+// Removes what has sat in the trash for more than `days` days (0 or less: nothing). Each removal is written to the audit log
+// with a system actor, so nothing disappears without a trace.
+async function purgeOld(days) {
+  if (!(days > 0)) return { blueprints: 0, users: 0 };
+  const { audit } = require('./audit');
+  const system = { ip: null, id: 'trash-cleanup' }, actor = { id: null, email: 'system (trash cleanup)' };
+  const interval = `${Number(days)} days`;
+  const bps = await db.query(`DELETE FROM blueprints WHERE deleted_at < now() - $1::interval RETURNING id, title, version`, [interval]);
+  for (const b of bps) await audit(system, 'blueprint.purged', { actor, type: 'blueprint', id: b.id, detail: `Permanently deleted "${b.title}" after ${days} days in the trash` });
+  const us = await db.query(`DELETE FROM users WHERE deleted_at < now() - $1::interval RETURNING id, email, name, role`, [interval]);
+  for (const u of us) await audit(system, 'user.purged', { actor, type: 'user', id: u.id, detail: `Permanently deleted ${u.role} account ${u.email} after ${days} days in the trash` });
+  return { blueprints: bps.length, users: us.length };
+}
+
+module.exports = { deleteBlueprint, restoreBlueprint, deleteUser, restoreUser, purgeBlueprint, purgeUser, purgeOld };

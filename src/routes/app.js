@@ -16,8 +16,17 @@ router.use(requireLogin);
 const searchLimit = rateLimit({ max: 240, windowMs: 60 * 1000, key: (req) => `u${req.user.id}` });
 router.param('id', numericParam);
 
+// The home page shows 48 blueprints at a time. Typing in the filter narrows the cards on the page instantly; pressing Enter
+// searches all of them (titles and descriptions) on the server.
+const HOME_PER_PAGE = 48;
 router.get('/', async (req, res) => {
-  res.render('home', { title: 'API Documentation', blueprints: await blueprintsFor(req.user) });
+  const homeQ = text(req.query.q, 100);
+  const all = await blueprintsFor(req.user, homeQ ? 'b.title ILIKE $2 OR b.description ILIKE $2' : '', homeQ ? [likeOf(homeQ)] : []);
+  const pages = Math.max(1, Math.ceil(all.length / HOME_PER_PAGE));
+  const page = Math.min(Math.max(1, parseInt(req.query.page, 10) || 1), pages);
+  const offset = (page - 1) * HOME_PER_PAGE;
+  const pg = { param: 'page', page, pages, limit: HOME_PER_PAGE, total: all.length, offset, from: all.length ? offset + 1 : 0, to: Math.min(all.length, offset + HOME_PER_PAGE), sizes: [] };
+  res.render('home', { title: 'API Documentation', blueprints: all.slice(offset, offset + HOME_PER_PAGE), pg, homeQ });
 });
 
 // ---- Search ----

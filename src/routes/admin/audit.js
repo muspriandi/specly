@@ -1,6 +1,7 @@
 const router = require('./router')();
 const db = require('../../db');
 const { text } = require('../../lib/validate');
+const { audit } = require('../../services/audit');
 
 const GROUPS = ['auth', 'user', 'invite', 'request', 'blueprint'];
 const DEFAULT_LIMIT = 50, MIN_LIMIT = 5, MAX_LIMIT = 200;
@@ -19,6 +20,36 @@ function decode(raw, sort) {
     return Array.isArray(p) && p.length === 2 && typeof p[0] === 'string' && okId(p[1]) ? p : null;
   } catch { return null; }
 }
+
+// CSV export of the same filters (group, q), newest first, in batches so a large log never sits in memory. Capped at 50,000 rows.
+// Cells that start with = + - @ (or a control character) are prefixed with an apostrophe, so a spreadsheet never runs them as a formula.
+const EXPORT_MAX = 50_000, EXPORT_BATCH = 2000;
+const csvCell = (v) => {
+  let s = v == null ? '' : String(v);
+  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+};
+router.get('/export.csv', async (req, res) => {
+  const q = text(req.query.q, 100);
+  const group = GROUPS.includes(req.query.group) ? req.query.group : '';
+  const conds = [], params = [];
+  if (group) { params.push(`${group}.%`); conds.push(`action LIKE $${params.length}`); }
+  if (q) { params.push(`%${q.replace(/[\\%_]/g, '\\$&')}%`); conds.push(`(action ILIKE $${params.length} OR actor_label ILIKE $${params.length} OR detail ILIKE $${params.length} OR ip ILIKE $${params.length})`); }
+  res.set({ 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="audit-log-${new Date().toISOString().slice(0, 10)}.csv"`, 'Cache-Control': 'no-store' });
+  res.write('time,actor,action,target,detail,ip\r\n');
+  let sent = 0, last = null;
+  while (sent < EXPORT_MAX) {
+    const p = [...params];
+    const where = [...conds];
+    if (last !== null) { p.push(last); where.push(`id < $${p.length}`); }
+    const rows = await db.query(`SELECT id, at, actor_label, action, target_type, target_id, detail, ip FROM audit_log ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY id DESC LIMIT ${Math.min(EXPORT_BATCH, EXPORT_MAX - sent)}`, p);
+    if (!rows.length) break;
+    for (const r of rows) res.write([r.at.toISOString(), r.actor_label, r.action, r.target_type ? `${r.target_type}:${r.target_id || ''}` : '', r.detail, r.ip].map(csvCell).join(',') + '\r\n');
+    sent += rows.length; last = rows[rows.length - 1].id;
+  }
+  await audit(req, 'audit.exported', { detail: `Exported ${sent} audit log row${sent === 1 ? '' : 's'}${group ? ` (group ${group})` : ''}${q ? ` matching "${q}"` : ''}` });
+  res.end();
+});
 
 // Keyset (cursor) pagination: `after` = rows following the cursor in the current order, `before` = rows preceding it.
 // No OFFSET and no COUNT(*): cost stays flat however deep you go, and rows added meanwhile never shift pages.
