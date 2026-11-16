@@ -1,5 +1,5 @@
 <%# Sub-navigation for /manage pages. Shown under the header on list pages (not on focused add/edit flows). %>
 <% var an = [['/manage/blueprints','Blueprints','book'],['/manage/requests','Access requests','key'],['/manage/users','Users','users'],['/manage/invites','Invitations','mail'],['/manage/audit','Audit log','list'],['/manage/trash','Trash','trash']]; %>
 <nav aria-label="Manage" class="subnav"><div class="subnav-in">
-  <% an.forEach(function (l) { %><a href="<%= l[0] %>" class="subnav-link" <%- cur.indexOf(l[0]) === 0 ? 'aria-current="page"' : '' %>><%- icon(l[2], 'size-4') %><span><%= l[1] %></span><% if (l[0] === '/manage/requests' && pendingCount) { %><span class="badge badge-warn !px-1.5 !py-0"><%= pendingCount %></span><% } %></a><% }) %>
+  <% an.forEach(function (l) { %><a href="<%= l[0] %>" class="subnav-link" <%- cur.indexOf(l[0]) === 0 ? 'aria-current="page"' : '' %>><%- icon(l[2], 'size-4') %><span><%= l[1] %></span><% if (l[0] === '/manage/requests' && pendingCount) { %><span class="badge badge-warn !px-1.5 !py-0"><%= pendingCount > 99 ? "99+" : pendingCount %></span><% } %></a><% }) %>
 </div></nav>

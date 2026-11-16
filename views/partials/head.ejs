@@ -27,14 +27,14 @@
     <%# Phones: everything folds into one menu so the first row stays uncluttered; search keeps its own row. %>
     <nav aria-label="Mobile" class="order-2 ml-auto sm:hidden">
       <details class="relative" data-menu>
-        <summary class="nav-link flex cursor-pointer list-none items-center gap-2 [&::-webkit-details-marker]:hidden"><%- icon('menu', 'size-5') %><span class="sr-only">Menu</span><% if (pendingCount) { %><span class="badge badge-warn !px-1.5 !py-0"><%= pendingCount %></span><% } %></summary>
+        <summary class="nav-link flex cursor-pointer list-none items-center gap-2 [&::-webkit-details-marker]:hidden"><%- icon('menu', 'size-5') %><span class="sr-only">Menu</span><% if (pendingCount) { %><span class="badge badge-warn !px-1.5 !py-0"><%= pendingCount > 99 ? "99+" : pendingCount %></span><% } %></summary>
         <div class="menu !w-64">
           <div class="px-3 py-2"><div class="truncate text-sm font-semibold"><%= user.name %></div><div class="truncate text-xs text-slate-600 dark:text-slate-400"><%= user.email %></div></div>
           <hr class="menu-sep">
           <a href="/" <%- cur === '/' || cur.indexOf('/blueprints') === 0 || cur === '/search' ? 'aria-current="page"' : '' %>><%- icon('file') %>Documentation</a>
           <% if (user.role === 'admin') { %>
             <div class="menu-label">Manage</div>
-            <% [['/manage/blueprints','Blueprints','book'],['/manage/requests','Access requests','key'],['/manage/users','Users','users'],['/manage/invites','Invitations','mail'],['/manage/audit','Audit log','list'],['/manage/trash','Trash','trash']].forEach(function (l) { %><a href="<%= l[0] %>" <%- cur.indexOf(l[0]) === 0 ? 'aria-current="page"' : '' %>><%- icon(l[2]) %><span class="flex-1"><%= l[1] %></span><% if (l[0] === '/manage/requests' && pendingCount) { %><span class="badge badge-warn !px-1.5 !py-0"><%= pendingCount %></span><% } %></a><% }) %>
+            <% [['/manage/blueprints','Blueprints','book'],['/manage/requests','Access requests','key'],['/manage/users','Users','users'],['/manage/invites','Invitations','mail'],['/manage/audit','Audit log','list'],['/manage/trash','Trash','trash']].forEach(function (l) { %><a href="<%= l[0] %>" <%- cur.indexOf(l[0]) === 0 ? 'aria-current="page"' : '' %>><%- icon(l[2]) %><span class="flex-1"><%= l[1] %></span><% if (l[0] === '/manage/requests' && pendingCount) { %><span class="badge badge-warn !px-1.5 !py-0"><%= pendingCount > 99 ? "99+" : pendingCount %></span><% } %></a><% }) %>
           <% } %>
           <hr class="menu-sep">
           <button type="button" data-theme-toggle><%- icon('moon', 'size-4 dark:hidden') %><%- icon('sun', 'hidden size-4 dark:block') %>Switch theme</button>
@@ -50,13 +50,13 @@
       <% if (user.role === 'admin') { %>
       <details class="relative" data-menu>
         <summary class="nav-link flex cursor-pointer list-none items-center gap-1 [&::-webkit-details-marker]:hidden" <%- onAdmin ? 'aria-current="page"' : '' %>>
-          Manage <% if (pendingCount) { %><span class="badge badge-warn !px-1.5 !py-0" title="<%= pendingCount %> pending access request(s)"><%= pendingCount %></span><% } %><%- icon('chevron', 'size-3.5') %>
+          Manage <% if (pendingCount) { %><span class="badge badge-warn !px-1.5 !py-0" title="<%= pendingCount %> pending access request(s)"><%= pendingCount > 99 ? "99+" : pendingCount %></span><% } %><%- icon('chevron', 'size-3.5') %>
         </summary>
         <div class="menu">
           <% [['Content', [['/manage/blueprints','Blueprints','book'],['/manage/requests','Access requests','key']]], ['People', [['/manage/users','Users','users'],['/manage/invites','Invitations','mail']]], ['System', [['/manage/audit','Audit log','list'],['/manage/trash','Trash','trash']]]].forEach(function (g, gi) { %>
             <% if (gi) { %><hr class="menu-sep"><% } %>
             <div class="menu-label"><%= g[0] %></div>
-            <% g[1].forEach(function (l) { %><a href="<%= l[0] %>" <%- cur.indexOf(l[0]) === 0 ? 'aria-current="page"' : '' %>><%- icon(l[2], 'size-4') %><span class="flex-1"><%= l[1] %></span><% if (l[0] === '/manage/requests' && pendingCount) { %><span class="badge badge-warn !px-1.5 !py-0"><%= pendingCount %></span><% } %></a><% }) %>
+            <% g[1].forEach(function (l) { %><a href="<%= l[0] %>" <%- cur.indexOf(l[0]) === 0 ? 'aria-current="page"' : '' %>><%- icon(l[2], 'size-4') %><span class="flex-1"><%= l[1] %></span><% if (l[0] === '/manage/requests' && pendingCount) { %><span class="badge badge-warn !px-1.5 !py-0"><%= pendingCount > 99 ? "99+" : pendingCount %></span><% } %></a><% }) %>
           <% }) %>
         </div>
       </details>
