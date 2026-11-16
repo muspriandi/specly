@@ -27,6 +27,10 @@ async function searchScope(req) {
   return bp && (await canView(req.user, bp.id)) ? { id: bp.id, title: bp.title } : false;
 }
 
+// Searching for just a method name ("get", "post") matches that method exactly; every other arm of the search is a
+// trigram-indexed substring match, so adding a substring match on the method too would force a full table scan.
+const METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS', 'TRACE']);
+
 router.get('/search', async (req, res) => {
   const q = text(req.query.q, 100);
   const scope = await searchScope(req);
@@ -38,9 +42,9 @@ router.get('/search', async (req, res) => {
     // Endpoints are only searched inside blueprints the user may read (filtered in SQL, no per-row lookups).
     endpoints = await db.query(`
       SELECT e.*, b.title AS blueprint_title FROM endpoints e JOIN blueprints b ON b.id=e.blueprint_id
-      WHERE (e.path ILIKE $1 OR e.summary ILIKE $1 OR e.operation_id ILIKE $1 OR e.method ILIKE $1)
+      WHERE (e.path ILIKE $1 OR e.summary ILIKE $1 OR e.operation_id ILIKE $1${METHODS.has(q.toUpperCase()) ? ' OR e.method = $5' : ''})
         AND ($2::int IS NULL OR e.blueprint_id = $2) AND b.deleted_at IS NULL AND ${READABLE}
-      ORDER BY lower(b.title), e.path LIMIT 200`, [like, scope ? scope.id : null, req.user.id, req.user.role !== 'admin']);
+      ORDER BY lower(b.title), e.path LIMIT 200`, [like, scope ? scope.id : null, req.user.id, req.user.role !== 'admin', ...(METHODS.has(q.toUpperCase()) ? [q.toUpperCase()] : [])]);
   }
   res.render('search', { title: q ? `Search: ${q}` : 'Search', q, blueprints, endpoints, scope });
 });
@@ -54,12 +58,12 @@ router.get('/search/suggest', async (req, res) => {
   const blueprints = scope ? [] : (await blueprintsFor(req.user, `WHERE b.title ILIKE $2`, [like])).filter((b) => b.access === 'granted').slice(0, 4)
     .map((b) => ({ id: b.id, title: b.title }));
   const rows = await db.query(`
-    SELECT e.method, e.path, e.summary, e.operation_id, e.tag, e.blueprint_id, b.title AS blueprint_title
+    SELECT e.method, e.path, e.summary, e.operation_id, e.tag, e.blueprint_id, e.deprecated, e.status, b.title AS blueprint_title
     FROM endpoints e JOIN blueprints b ON b.id=e.blueprint_id
     WHERE (e.path ILIKE $1 OR e.summary ILIKE $1 OR e.operation_id ILIKE $1)
       AND ($2::int IS NULL OR e.blueprint_id = $2) AND b.deleted_at IS NULL AND ${READABLE}
     ORDER BY lower(b.title), e.path LIMIT 6`, [like, scope ? scope.id : null, req.user.id, req.user.role !== 'admin']);
-  const endpoints = rows.map((e) => ({ method: e.method, path: e.path, summary: e.summary, blueprint: e.blueprint_title,
+  const endpoints = rows.map((e) => ({ method: e.method, path: e.path, summary: e.summary, blueprint: e.blueprint_title, deprecated: !!e.deprecated, status: e.status || '',
     href: `/blueprints/${e.blueprint_id}#/${encodeURIComponent(e.tag)}/${encodeURIComponent(e.operation_id || (e.method.toLowerCase() + e.path.replace(/[^\w]/g, '_')))}` }));
   res.json({ blueprints, endpoints });
 });

@@ -12,7 +12,7 @@ async function canView(user, blueprintId) {
 // `where` may use $2, $3… for `params` ($1 is always the user id).
 async function blueprintsFor(user, where = '', params = []) {
   const rows = await db.query(`
-    SELECT b.id, b.title, b.version, b.description, b.format, b.updated_at,
+    SELECT b.id, b.title, b.version, left(b.description, 400) AS description, b.format, b.updated_at,
       (SELECT status FROM access_requests r WHERE r.user_id=$1 AND r.blueprint_id=b.id
         ORDER BY (r.status='approved') DESC, r.id DESC LIMIT 1) AS req_status,
       (SELECT COUNT(*)::int FROM endpoints e WHERE e.blueprint_id=b.id) AS endpoint_count

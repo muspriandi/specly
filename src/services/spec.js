@@ -102,6 +102,8 @@ function listEndpoints(spec) {
         summary: typeof op.summary === 'string' ? op.summary : '',
         operation_id: typeof op.operationId === 'string' ? op.operationId : '',
         tag: Array.isArray(op.tags) && op.tags[0] ? String(op.tags[0]) : 'default',
+        deprecated: op.deprecated === true,
+        status: typeof op['x-status'] === 'string' ? op['x-status'].trim().slice(0, 30) : '',
       });
     }
   }

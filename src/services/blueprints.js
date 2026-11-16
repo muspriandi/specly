@@ -33,14 +33,15 @@ async function saveBlueprint(id, text, userId, note = null) {
         [title, version, description, format, JSON.stringify(spec), id]);
       await q('DELETE FROM endpoints WHERE blueprint_id=$1', [id]);
     } else {
-      id = (await q(`INSERT INTO blueprints (title,version,description,format,spec,created_by)
-        VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`, [title, version, description, format, JSON.stringify(spec), userId]))[0].id;
+      id = (await q(`INSERT INTO blueprints (title,version,description,format,spec)
+        VALUES ($1,$2,$3,$4,$5) RETURNING id`, [title, version, description, format, JSON.stringify(spec)]))[0].id;
     }
     if (endpoints.length) { // one round trip instead of one INSERT per endpoint
-      await q(`INSERT INTO endpoints (blueprint_id,method,path,summary,operation_id,tag)
-        SELECT $1, * FROM unnest($2::text[], $3::text[], $4::text[], $5::text[], $6::text[])`,
+      await q(`INSERT INTO endpoints (blueprint_id,method,path,summary,operation_id,tag,deprecated,status)
+        SELECT $1, * FROM unnest($2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $7::boolean[], $8::text[])
+        ON CONFLICT DO NOTHING`,
         [id, endpoints.map((e) => e.method), endpoints.map((e) => e.path), endpoints.map((e) => e.summary),
-          endpoints.map((e) => e.operation_id), endpoints.map((e) => e.tag)]);
+          endpoints.map((e) => e.operation_id), endpoints.map((e) => e.tag), endpoints.map((e) => e.deprecated), endpoints.map((e) => e.status)]);
     }
     const revision = latest ? latest.version_no + 1 : 1;
     await q(`INSERT INTO blueprint_versions (blueprint_id,version_no,title,version,format,source,note,created_by)

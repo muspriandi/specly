@@ -34,29 +34,45 @@ CREATE TABLE IF NOT EXISTS blueprints (
   description TEXT,
   format TEXT NOT NULL CHECK (format IN ('yaml','json')),
   spec JSONB NOT NULL,
-  created_by INT REFERENCES users(id) ON DELETE SET NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- Flattened operations, used by search.
+-- The primary key also serves "all endpoints of a blueprint" (its first column), so there is no separate index for that.
 CREATE TABLE IF NOT EXISTS endpoints (
-  id SERIAL PRIMARY KEY,
   blueprint_id INT NOT NULL REFERENCES blueprints(id) ON DELETE CASCADE,
   method TEXT NOT NULL,
   path TEXT NOT NULL,
   summary TEXT,
   operation_id TEXT,
-  tag TEXT
+  tag TEXT,
+  deprecated BOOLEAN NOT NULL DEFAULT false,
+  PRIMARY KEY (blueprint_id, method, path)
 );
-CREATE INDEX IF NOT EXISTS idx_endpoints_bp ON endpoints(blueprint_id);
+-- Older databases: add the column nullable; bootstrap.js fills it in and then makes it NOT NULL (see backfillDeprecated).
+ALTER TABLE endpoints ADD COLUMN IF NOT EXISTS deprecated BOOLEAN;
+-- x-status (WIP, beta…): '' = none, NULL = not indexed yet (bootstrap.js backfillStatus fills it in).
+ALTER TABLE endpoints ADD COLUMN IF NOT EXISTS status TEXT;
+-- Older databases: replace the unused serial id with the natural key (skipped, with a notice, if duplicates exist).
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='endpoints' AND column_name='id') THEN
+    IF EXISTS (SELECT 1 FROM endpoints GROUP BY blueprint_id, method, path HAVING count(*) > 1) THEN
+      RAISE NOTICE 'endpoints key migration skipped: duplicate (blueprint, method, path) rows exist';
+    ELSE
+      ALTER TABLE endpoints DROP CONSTRAINT IF EXISTS endpoints_pkey;
+      ALTER TABLE endpoints DROP COLUMN id;
+      ALTER TABLE endpoints ADD PRIMARY KEY (blueprint_id, method, path);
+    END IF;
+  END IF;
+END $$;
+DROP INDEX IF EXISTS idx_endpoints_bp;
 
 CREATE TABLE IF NOT EXISTS access_requests (
   id SERIAL PRIMARY KEY,
   user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   blueprint_id INT NOT NULL REFERENCES blueprints(id) ON DELETE CASCADE,
   message TEXT,
-  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected','cancelled')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   decided_by INT REFERENCES users(id) ON DELETE SET NULL,
   decided_at TIMESTAMPTZ
@@ -91,13 +107,17 @@ CREATE TABLE IF NOT EXISTS audit_log (
   detail TEXT,
   ip TEXT
 );
-CREATE INDEX IF NOT EXISTS idx_audit_at ON audit_log (at DESC);
-CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_log (action);
+-- (No index on "at": the log is read newest-first by id.)
+DROP INDEX IF EXISTS idx_audit_at;
+-- Serves the group filter (action LIKE 'request.%') under any database collation, which a plain btree does not.
+CREATE INDEX IF NOT EXISTS idx_audit_action_prefix ON audit_log (action text_pattern_ops);
+DROP INDEX IF EXISTS idx_audit_action;
 
 -- ---- Indexes added for the hot paths (all idempotent) ----
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions (user_id);            -- end all sessions of a user, cascade deletes
 CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions (expires_at);      -- hourly purge
-CREATE INDEX IF NOT EXISTS idx_tokens_expires ON tokens (expires_at);          -- hourly purge
+-- (No index on tokens.expires_at: the table only holds outstanding links, so the hourly purge scans a handful of rows.)
+DROP INDEX IF EXISTS idx_tokens_expires;
 CREATE INDEX IF NOT EXISTS idx_tokens_email ON tokens (type, email);           -- "newest link wins" replace
 CREATE INDEX IF NOT EXISTS idx_requests_bp ON access_requests (blueprint_id);  -- cascade deletes, per-blueprint counts
 CREATE INDEX IF NOT EXISTS idx_requests_pending ON access_requests (created_at) WHERE status = 'pending'; -- header badge + review queue
@@ -116,6 +136,7 @@ DO $$ BEGIN
   CREATE EXTENSION IF NOT EXISTS pg_trgm;
   CREATE INDEX IF NOT EXISTS idx_endpoints_path_trgm ON endpoints USING gin (path gin_trgm_ops);
   CREATE INDEX IF NOT EXISTS idx_endpoints_summary_trgm ON endpoints USING gin (summary gin_trgm_ops);
+  CREATE INDEX IF NOT EXISTS idx_endpoints_opid_trgm ON endpoints USING gin (operation_id gin_trgm_ops);
 EXCEPTION WHEN OTHERS THEN RAISE NOTICE 'pg_trgm unavailable, search falls back to sequential scan';
 END $$;
 
@@ -140,5 +161,26 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_users_email_live ON users (lower(email)) WH
 CREATE INDEX IF NOT EXISTS idx_blueprints_deleted ON blueprints (deleted_at) WHERE deleted_at IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_users_deleted ON users (deleted_at) WHERE deleted_at IS NOT NULL;
 -- Requests still pending when their user or blueprint is deleted become 'cancelled'.
-ALTER TABLE access_requests DROP CONSTRAINT IF EXISTS access_requests_status_check;
-ALTER TABLE access_requests ADD CONSTRAINT access_requests_status_check CHECK (status IN ('pending','approved','rejected','cancelled'));
+-- Only rewritten when it does not list 'cancelled' yet: re-adding a constraint locks and re-checks the whole table.
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid='access_requests'::regclass AND conname='access_requests_status_check'
+                 AND pg_get_constraintdef(oid) LIKE '%cancelled%') THEN
+    ALTER TABLE access_requests DROP CONSTRAINT IF EXISTS access_requests_status_check;
+    ALTER TABLE access_requests ADD CONSTRAINT access_requests_status_check CHECK (status IN ('pending','approved','rejected','cancelled'));
+  END IF;
+END $$;
+
+-- ---- Trim: columns nobody read (history lives in blueprint_versions, whose first row has the author and date) ----
+-- Kept after the source-column migration above, which still copies them for very old databases.
+ALTER TABLE blueprints DROP COLUMN IF EXISTS created_by, DROP COLUMN IF EXISTS created_at;
+
+-- ---- Compression: every revision stores the whole document, so these grow fastest. lz4 is quicker than the
+-- default and only applies to newly written values (PostgreSQL 14+ built with lz4; otherwise left alone). ----
+DO $$ BEGIN
+  IF current_setting('server_version_num')::int >= 140000
+     AND EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid='blueprint_versions'::regclass AND attname='source' AND attcompression <> 'l') THEN
+    ALTER TABLE blueprint_versions ALTER COLUMN source SET COMPRESSION lz4;
+    ALTER TABLE blueprints ALTER COLUMN spec SET COMPRESSION lz4;
+  END IF;
+EXCEPTION WHEN OTHERS THEN RAISE NOTICE 'lz4 compression not applied: %', SQLERRM;
+END $$;
