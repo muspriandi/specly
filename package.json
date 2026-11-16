@@ -14,6 +14,7 @@
     "migrate:new": "node scripts/migrate.js new",
     "seed": "node scripts/seed.js",
     "backup": "node scripts/backup.js",
+    "screenshots": "node scripts/screenshots.js",
     "lint": "eslint ."
   },
   "keywords": [],
