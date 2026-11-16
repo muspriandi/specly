@@ -1,0 +1,40 @@
+# Quick production-like run:  ADMIN_PASSWORD='choose-one' docker compose up --build
+# The app listens on http://localhost:3000. Data lives in the "pgdata" volume.
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: specly
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-specly}
+      POSTGRES_DB: specly
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U specly -d specly"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://specly:${DB_PASSWORD:-specly}@db:5432/specly
+      BASE_URL: ${BASE_URL:-http://localhost:3000}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@specly.local}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD for the first-run admin account}
+      # Set SMTP_HOST (and the other SMTP_* values) for real email. Without it, production mode refuses to start
+      # unless ALLOW_CONSOLE_MAIL=true, which prints emails (including reset links) to the container log: demo only.
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      ALLOW_CONSOLE_MAIL: ${ALLOW_CONSOLE_MAIL:-}
+      TRUST_PROXY: ${TRUST_PROXY:-false}
+
+volumes:
+  pgdata:

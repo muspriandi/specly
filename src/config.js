@@ -40,7 +40,16 @@ const config = Object.freeze({
   },
 });
 
-if (isProd && !baseUrl) throw new Error('BASE_URL is required when NODE_ENV=production (used in email links).');
+// Production refuses to start on settings that are only safe on a developer laptop.
+if (isProd) {
+  const problems = [];
+  if (!baseUrl) problems.push('BASE_URL is required (used in email links).');
+  if (!env.DATABASE_URL) problems.push('DATABASE_URL is required (the localhost default is for development).');
+  if (!env.SMTP_HOST && env.ALLOW_CONSOLE_MAIL !== 'true') {
+    problems.push('SMTP_HOST is required: without it emails (including password reset links) are printed to the log. Set ALLOW_CONSOLE_MAIL=true only for a demo.');
+  }
+  if (problems.length) throw new Error(`Cannot start in production:\n - ${problems.join('\n - ')}`);
+}
 if (!Number.isInteger(config.port) || config.port < 0) throw new Error('PORT must be a number.');
 
 module.exports = config;
