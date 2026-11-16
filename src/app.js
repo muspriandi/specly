@@ -7,7 +7,11 @@ const db = require('./db');
 const auth = require('./services/auth');
 const { fmtDate } = require('./lib/format');
 const { icon } = require('./lib/icons');
-const { headers, csrf } = require('./lib/security');
+const { headers, csrf, rateLimit } = require('./lib/security');
+const { requestLog, pathOf } = require('./lib/logger');
+const log = require('./lib/log');
+const shares = require('./services/shares');
+const { readerRouter } = require('./routes/reader');
 const { errorPage, notFound, readFlash } = require('./lib/http');
 
 function createApp() {
@@ -17,6 +21,12 @@ function createApp() {
   app.set('trust proxy', config.trustProxy);
   app.disable('x-powered-by');
 
+  app.use(requestLog);
+  // Liveness/readiness probe for load balancers and orchestrators: 200 when the database answers, 503 otherwise.
+  app.get('/healthz', async (req, res) => {
+    const ok = await db.ping();
+    res.status(ok ? 200 : 503).set('Cache-Control', 'no-store').json({ status: ok ? 'ok' : 'unavailable' });
+  });
   app.use(headers);
   app.use('/static/swagger', express.static(swaggerUiDist.getAbsoluteFSPath(), { index: false }));
   // Markdown rendering for descriptions (client side), served from node_modules.
@@ -54,8 +64,8 @@ function createApp() {
   app.use((err, req, res, next) => {
     if (res.headersSent) return next(err);
     if (err.type === 'entity.too.large') return errorPage(res, 413, 'Too large', 'The request is too large.');
-    console.error(err);
-    errorPage(res, 500, 'Error', 'Something went wrong.');
+    log.error('request failed', { event: 'http.error', req: req.id, method: req.method, path: pathOf(req), user: req.user ? req.user.id : null, ip: req.ip, err });
+    errorPage(res, 500, 'Error', `Something went wrong. If it keeps happening, report reference ${req.id}.`);
   });
   return app;
 }

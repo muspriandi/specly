@@ -2,6 +2,8 @@ const crypto = require('crypto');
 const helmet = require('helmet');
 const config = require('../config');
 const { cookieBase } = require('./http');
+const log = require('./log');
+const { pathOf } = require('./logger');
 
 // Strict CSP: no inline scripts (confirm dialogs use data-confirm + /static/app.js).
 const headers = helmet({
@@ -39,6 +41,7 @@ function csrf(req, res, next) {
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
   const sent = (req.body && req.body._csrf) || req.query._csrf;
   if (!sent || !safeEqual(sent, token)) {
+    log.warn('security', { event: 'csrf.rejected', req: req.id, method: req.method, path: pathOf(req), user: req.user ? req.user.id : null, ip: req.ip });
     return res.status(403).render('error', { title: 'Session expired', message: 'Your form expired. Go back, refresh the page and try again.' });
   }
   next();
@@ -71,6 +74,7 @@ function rateLimit({ max, windowMs, key = (req) => req.ip }) {
   return (req, res, next) => {
     const k = key(req);
     if (limiter.isLimited(k)) {
+      log.warn('security', { event: 'rate_limited', req: req.id, path: pathOf(req), ip: req.ip });
       return res.status(429).render('error', { title: 'Too many requests', message: 'Please wait a few minutes and try again.' });
     }
     limiter.hit(k);
