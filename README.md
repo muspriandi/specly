@@ -16,7 +16,7 @@ Upload a spec, preview it, review what changed, publish. Readers get a clean, se
 
 - **A reference people enjoy reading.** Folders and endpoints, request and response schemas, and example calls in cURL, JavaScript and Python. Light and dark, works on a phone.
 - **A publish flow with a safety net.** Edit, preview on desktop/tablet/phone, review exactly which endpoints were added, changed or removed (and which changes can **break clients**), then publish. Every save is a revision you can read, compare, download or restore. Pipelines can publish too.
-- **Access you control.** Admins, members and guests; blueprints are assigned per person, optionally until a date; members can request more; read-only share links for people outside your team. Readers can watch a blueprint and get an email when it changes.
+- **Access you control.** Admins, members and guests; blueprints are assigned per person, optionally until a date; members can request more; read-only share links for people outside your team.
 - **An audit trail and sensible security.** Two-factor sign-in, active sessions, rate limits, a small audit log of the changes that matter and structured logs for everything else.
 
 ## Tour
@@ -41,7 +41,7 @@ Upload a spec, preview it, review what changed, publish. Readers get a clean, se
 </tr>
 <tr>
 <td><sub><b>Your blueprints</b>, filtered to what you are allowed to read. Download the original file or a Postman collection from the viewer.</sub></td>
-<td><sub><b>What changed.</b> Every revision lists the endpoints added, changed, removed and newly deprecated, and calls out the <b>breaking changes</b>, so integrators do not have to diff a spec. Readers can <b>Watch</b> a blueprint to be emailed when it changes.</sub></td>
+<td><sub><b>What changed.</b> Every revision lists the endpoints added, changed, removed and newly deprecated, and calls out the <b>breaking changes</b>, so integrators do not have to diff a spec.</sub></td>
 </tr>
 </table>
 
@@ -133,7 +133,6 @@ Locked out? Use *Forgot password* (needs SMTP; in development the link is printe
 - **Share link:** for someone without an account: read-only access to that one blueprint (no search, no other pages), 1 to 90 days, revocable, never indexed. Only a hash of the link is stored, and opening one writes nothing to the database.
 - **Single sign-on:** optional OpenID Connect (Google, Microsoft Entra, Okta, Keycloak, Auth0, …). A *Sign in with …* button appears next to the password form. Authorization code flow with PKCE, state and nonce; the ID token's signature, issuer, audience, expiry and nonce are all checked; and only an email the provider has **verified** is accepted. Accounts are matched by email, and with `OIDC_ALLOWED_DOMAINS` only those domains can sign in this way. `OIDC_AUTO_CREATE=true` creates a **guest** on first sign-in (who sees nothing until an admin assigns blueprints). The provider is trusted to apply its own second factor, so the local authenticator step is skipped for SSO sign-ins.
 - **Time-limited access:** when assigning, pick an end date: the person can read until the end of that day (UTC), then it stops everywhere and they can request it again.
-- **Watch:** readers click *Watch* on a blueprint to be emailed when it is published, with what was added, changed, removed and what is breaking. Access is re-checked at send time.
 - **Sign-in:** optional two-factor sign-in (authenticator app plus single-use recovery codes), a page of active sessions, idle sessions end after 24 hours, and the last active admin can never be demoted, disabled or deleted.
 
 ## Publish from CI
@@ -150,7 +149,7 @@ curl --fail-with-body -X PUT "https://docs.example.com/api/v1/blueprints/12" \
 
 The answer is JSON: `unchanged`, the new `revision`, counts of `added` / `changed` / `removed` / `deprecated` endpoints, and a `breaking` list. An invalid document is refused with 400 and the line of the error, so a broken spec fails the pipeline instead of reaching readers. Limits: 5 MB per document, 60 publishes a minute per token, 10 active tokens per blueprint.
 
-**Breaking changes** are worked out field by field (OpenAPI 3.x and Swagger 2.0, local `$ref`s resolved): a parameter that became required or changed type, a request field that became required, a success response or response field that disappeared or changed type, a removed endpoint. They are shown before you publish, in the changelog, in watcher emails and in the API answer. Admins can open any old revision as documentation and compare any two (Manage → Blueprints → History).
+**Breaking changes** are worked out field by field (OpenAPI 3.x and Swagger 2.0, local `$ref`s resolved): a parameter that became required or changed type, a request field that became required, a success response or response field that disappeared or changed type, a removed endpoint. They are shown before you publish, in the changelog and in the API answer. Admins can open any old revision as documentation and compare any two (Manage → Blueprints → History).
 
 ## Configuration
 
@@ -163,7 +162,7 @@ Everything is read from `.env` in one place, `src/config.js` (copy `.env.example
 | `DATABASE_URL` | `postgresql://postgres:postgres@localhost:5432/specly` | PostgreSQL connection (required in production) |
 | `ADMIN_EMAIL`, `ADMIN_PASSWORD` | `admin@specly.local`, generated | The first admin, used by `npm run seed` and the first start |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM` | – | Email. Without `SMTP_HOST`, emails are printed to the console (development only) |
-| `NOTIFY_EMAILS` | `true` | Emails about access requests, assignments and watched blueprints (invitations and resets always send) |
+| `NOTIFY_EMAILS` | `true` | Emails about access requests, and assignments (invitations and resets always send) |
 | `APP_SECRET` | – | 32+ characters; encrypts two-factor secrets in the database. **Required in production**: `openssl rand -base64 32` |
 | `TRUST_PROXY` | `false` | Set to `true` behind a reverse proxy |
 | `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` | – | Turn on single sign-on (all three). Register `<BASE_URL>/auth/oidc/callback` as the redirect URI. The issuer must be `https://` |

@@ -99,18 +99,6 @@ const resolveAccount = async (req, res, kind) => {
 };
 router.use('/blueprints/:id', readerRouter(resolveAccount));
 
-// ---- Watch a blueprint: get an email when it is published ----
-const watching = (set) => async (req, res) => {
-  const bp = await getBlueprint(req.params.id, 'id,title');
-  if (!bp || !(await canView(req.user, bp.id))) return notFound(res, 'Blueprint not found.');
-  if (set) await db.query('INSERT INTO blueprint_watchers (user_id, blueprint_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [req.user.id, bp.id]);
-  else await db.query('DELETE FROM blueprint_watchers WHERE user_id=$1 AND blueprint_id=$2', [req.user.id, bp.id]);
-  flash(res, set ? `You will be emailed when “${bp.title}” is published.` : `You will no longer be emailed about “${bp.title}”.`, 'success');
-  res.redirect(`/blueprints/${bp.id}`);
-};
-router.post('/blueprints/:id/watch', watching(true));
-router.post('/blueprints/:id/unwatch', watching(false));
-
 // ---- Member: request access (guests cannot; an admin assigns blueprints to them) ----
 router.post('/blueprints/:id/request', async (req, res) => {
   const bp = await getBlueprint(req.params.id, 'id,title');

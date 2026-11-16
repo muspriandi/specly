@@ -7,11 +7,6 @@
       <a class="px-3 py-1.5 <%= classic ? 'hover:bg-slate-100 dark:hover:bg-slate-800' : 'bg-brand-600 text-white' %>" href="<%= base %>" <%- classic ? '' : 'aria-current="page"' %>>Collection</a>
       <a class="px-3 py-1.5 <%= classic ? 'bg-brand-600 text-white' : 'hover:bg-slate-100 dark:hover:bg-slate-800' %>" href="<%= base %>?view=swagger" <%- classic ? 'aria-current="page"' : '' %>>Swagger UI</a>
     </div>
-    <% if (watching !== null && typeof watching !== 'undefined' && !(typeof revision !== 'undefined' && revision)) { %>
-    <form method="post" action="/blueprints/<%= bp.id %>/<%= watching ? 'unwatch' : 'watch' %>"><%- include('partials/csrf') %>
-      <button class="btn btn-sm btn-ghost" title="<%= watching ? 'You are emailed when this blueprint is published. Click to stop.' : 'Get an email when this blueprint is published' %>" aria-pressed="<%= watching ? 'true' : 'false' %>"><%- icon('mail') %><%= watching ? 'Watching' : 'Watch' %></button>
-    </form>
-    <% } %>
     <% if (!(typeof revision !== 'undefined' && revision)) { %><a class="btn btn-sm btn-ghost" href="<%= base %>/changelog">Changelog</a><% } %>
     <details class="relative" data-menu>
       <summary class="btn btn-sm btn-ghost list-none [&::-webkit-details-marker]:hidden" aria-label="Download options">Download <%- icon('chevron', 'size-3.5') %></summary>

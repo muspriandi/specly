@@ -5,7 +5,6 @@ const { rateLimit, createLimiter } = require('../lib/security');
 const tokens = require('../services/apitokens');
 const { saveBlueprint, describeSave } = require('../services/blueprints');
 const { audit } = require('../services/audit');
-const { notifyWatchers } = require('../services/notify');
 const log = require('../lib/log');
 
 const MAX_BODY = '5mb';
@@ -39,7 +38,6 @@ router.put('/blueprints/:id', express.text({ type: () => true, limit: MAX_BODY }
     const saved = await saveBlueprint(token.blueprint_id, req.body, null, `${note ? `${note} ` : ''}(API token "${token.name}")`);
     if (!saved.unchanged) {
       await audit(req, 'blueprint.updated', { actor: { id: null, email: `api token: ${token.name}` }, type: 'blueprint', id: token.blueprint_id, detail: describeSave(saved) });
-      notifyWatchers(req, token.blueprint_id, saved);
     }
     const d = saved.diff || { added: [], changed: [], removed: [], deprecated: [] };
     res.json({ ok: true, unchanged: !!saved.unchanged, revision: saved.revision, title: saved.title, version: saved.version, endpoints: saved.endpointCount,

@@ -11,7 +11,7 @@ const access = require('../../services/access');
 const { LIVE } = access;
 const shares = require('../../services/shares');
 const apitokens = require('../../services/apitokens');
-const { notifyAccessGranted, notifyWatchers } = require('../../services/notify');
+const { notifyAccessGranted } = require('../../services/notify');
 const { text } = require('../../lib/validate');
 const { paginate, limitSql, likeOf, sortOf } = require('../../lib/paginate');
 
@@ -128,7 +128,6 @@ router.post('/:id', upload.single('file'), async (req, res) => {
     const saved = await saveBlueprint(bp.id, sourceFrom(req), req.user.id, noteFrom(req));
     if (!saved.unchanged) {
       await audit(req, 'blueprint.updated', { type: 'blueprint', id: bp.id, detail: describeSave(saved) });
-      notifyWatchers(req, bp.id, saved);
     }
     flash(res, saved.unchanged ? 'No changes: the content is identical to the current revision.' : 'Blueprint updated.', saved.unchanged ? 'info' : 'success');
     res.redirect('/manage/blueprints');
@@ -311,7 +310,7 @@ router.get('/:id/versions/:vid', async (req, res) => {
   if (!v) return notFound(res, 'Revision not found.');
   const latest = (await latestRevision(bp.id)).version_no;
   res.render('viewer', { title: `${v.title} (revision ${v.version_no})`, bp: { ...bp, title: v.title, version: v.version, format: v.format }, scope: null, classic: req.query.view === 'swagger',
-    base: `/manage/blueprints/${bp.id}/versions/${v.id}`, shared: false, watching: null, revision: { no: v.version_no, latest, current: v.version_no === latest, blueprintId: bp.id } });
+    base: `/manage/blueprints/${bp.id}/versions/${v.id}`, shared: false, revision: { no: v.version_no, latest, current: v.version_no === latest, blueprintId: bp.id } });
 });
 
 router.get('/:id/versions/:vid/spec.json', async (req, res) => {
@@ -344,7 +343,6 @@ router.post('/:id/versions/:vid/restore', async (req, res) => {
   const v = await getVersion(req);
   if (!v) return notFound(res, 'Version not found.');
   const saved = await saveBlueprint(Number(req.params.id), v.source, req.user.id, `Restored from revision ${v.version_no}`);
-  if (!saved.unchanged) notifyWatchers(req, Number(req.params.id), saved);
   await audit(req, 'blueprint.restored', { type: 'blueprint', id: req.params.id,
     detail: describeSave(saved, { restoredFrom: { revision: v.version_no, version: saved.version } }) });
   flash(res, `Restored revision ${v.version_no} as the current one.`);

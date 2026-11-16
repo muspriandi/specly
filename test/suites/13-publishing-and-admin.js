@@ -167,59 +167,6 @@ test('old revisions can be read as documentation by admins only', async () => {
   assert.equal((await new Client().get(`/manage/blueprints/${id}/versions/${first.id}/spec.json`)).status, 302);
 });
 
-test('watching a blueprint: an email on every publish, only while you can still read it', async () => {
-  const id = await makeBlueprint('Watched API');
-  const hash = (await db.one('SELECT password_hash FROM users WHERE id=1')).password_hash;
-  const wid = (await db.one(`INSERT INTO users (email,name,password_hash,role) VALUES ('watcher@example.com','Wat',$1,'member') RETURNING id`, [hash])).id;
-  const w = new Client(); await w.login('watcher@example.com', 'Admin1234');
-  assert.equal((await w.post(`/blueprints/${id}/watch`, {})).status, 404, 'you cannot watch what you cannot read (and are not told it exists)');
-  await admin.post(`/manage/users/${wid}/access`, { bp: String(id) });
-  assert.match((await w.get(`/blueprints/${id}`)).text, />\s*Watch\s*</);
-  assert.equal((await w.post(`/blueprints/${id}/watch`, {})).status, 302);
-  assert.match((await w.get(`/blueprints/${id}`)).text, />\s*Watching\s*</);
-  assert.equal((await w.post(`/blueprints/${id}/watch`, {})).status, 302, 'watching twice is harmless');
-  assert.equal((await db.one('SELECT COUNT(*)::int AS n FROM blueprint_watchers WHERE blueprint_id=$1', [id])).n, 1);
-
-  const sent = (marker) => mails.slice(marker).filter((m) => /To: watcher@example\.com/.test(m) && /was updated/.test(m));
-  let mark = mails.length;
-  // published from the UI
-  assert.equal((await upload(admin, `/manage/blueprints/${id}`, DOC('\n      description: v2', '1.1').replace('Publish API', 'Watched API'), 'second revision')).status, 302);
-  await flushMail();
-  assert.equal(sent(mark).length, 1);
-  assert.match(sent(mark)[0], /Subject: Watched API was updated \(v1\.1\)/);
-  assert.match(sent(mark)[0], /second revision/);
-  assert.match(sent(mark)[0], /\/blueprints\/\d+\/changelog/);
-  // published by a pipeline, with a breaking change
-  const token = await newToken(id, 'ci');
-  mark = mails.length;
-  const broken = DOC('', '2.0').replace('Publish API', 'Watched API').replace("                  label: { type: string }\n", '');
-  assert.equal((await put(id, token, broken)).status, 200);
-  await flushMail();
-  assert.equal(sent(mark).length, 1);
-  assert.match(sent(mark)[0], /Subject: Watched API was updated \(v2\.0\): breaking changes/);
-  assert.match(sent(mark)[0], /Breaking changes \(1\):[\s\S]*Response 200 field "label" removed/);
-  // identical content: nothing to tell
-  mark = mails.length;
-  await put(id, token, broken);
-  await flushMail();
-  assert.equal(sent(mark).length, 0);
-  // access removed: no more mail, even though still "watching"
-  await admin.post(`/manage/users/${wid}/access/revoke`, { bp: String(id) });
-  mark = mails.length;
-  await put(id, token, DOC('\n      description: v3', '3.0').replace('Publish API', 'Watched API'));
-  await flushMail();
-  assert.equal(sent(mark).length, 0, 'a reader whose access was removed hears nothing');
-  // unwatch
-  await admin.post(`/manage/users/${wid}/access`, { bp: String(id) });
-  assert.equal((await w.post(`/blueprints/${id}/unwatch`, {})).status, 302);
-  assert.equal((await db.one('SELECT COUNT(*)::int AS n FROM blueprint_watchers WHERE blueprint_id=$1', [id])).n, 0);
-  mark = mails.length;
-  await put(id, token, DOC('\n      description: v4', '4.0').replace('Publish API', 'Watched API'));
-  await flushMail();
-  assert.equal(sent(mark).length, 0);
-  assert.equal((await new Client().post(`/blueprints/${id}/watch`, {})).status, 302, 'sign-in required');
-});
-
 test('sessions end after a period of inactivity, and an active one is kept alive', async () => {
   const hash = (await db.one('SELECT password_hash FROM users WHERE id=1')).password_hash;
   const uid = (await db.one(`INSERT INTO users (email,name,password_hash,role) VALUES ('idle@example.com','Idle',$1,'member') RETURNING id`, [hash])).id;
