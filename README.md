@@ -7,27 +7,51 @@ A small portal for publishing API documentation from OpenAPI 3.x / Swagger 2.0 b
 Needs Node 20+ and a PostgreSQL server (default `postgres:postgres@localhost:5432`).
 
     npm install
-    cp .env.example .env     # edit if needed
-    npm start                # builds the Tailwind CSS, then serves http://localhost:3000
+    cp .env.example .env        # set ADMIN_EMAIL / ADMIN_PASSWORD, and DATABASE_URL if yours differs
+    npm run migrate             # creates the database and all tables
+    npm run seed                # the first admin + five sample blueprints
+    npm run seed -- --demo      # optional: a demo member and guest to try the roles (development only)
+    npm start                   # builds the Tailwind CSS, then serves http://localhost:3000
 
-The `specly` database and all tables are created automatically on first start, together with an
-admin (`ADMIN_EMAIL` / `ADMIN_PASSWORD` from `.env`) and a sample blueprint.
-Forgot the admin password? `npm run reset-admin -- admin@specly.local NewPass123`.
+Sign in with the admin from `.env`; if `ADMIN_PASSWORD` is empty a password is generated and printed once.
+`npm start` also migrates and, on a completely empty database, creates the admin and one sample blueprint by itself,
+so `npm install && npm start` is enough to get going. `npm run dev` rebuilds the CSS and restarts on changes.
 
-UI is Tailwind CSS v4 (`src/input.css` → `public/app.css`). `npm run dev` rebuilds and restarts on changes.
+UI is Tailwind CSS v4 (`src/input.css` → `public/app.css`).
+
+If you are locked out: use *Forgot password* (needs SMTP), or ask another admin to reset your password or two-factor sign-in in Manage → Users.
+
+## Database migrations and seed data
+
+The schema is versioned: `db/migrations/NNN_name.sql` files are applied in number order, each in its own transaction, and recorded in the
+`schema_migrations` table (with a checksum, so an edited migration is refused). Forward-only; several instances can start at once.
+
+    npm run migrate                    apply pending migrations (creates the database if needed)
+    npm run migrate:status             what is applied and what is pending
+    npm run migrate:new -- add_tags    create the next numbered, empty migration
+
+`001_baseline.sql` is the whole schema as of today and is safe on databases created before migrations existed (they simply get it recorded).
+Change the schema by adding a new migration, never by editing an applied one. `AUTO_MIGRATE=false` makes the server refuse to start while
+migrations are pending, so you can run `npm run migrate` as a deliberate step (for example before a deploy).
+
+Seeding (`src/seed.js`, `npm run seed`) only adds what is missing and never overwrites: the admin (`ADMIN_EMAIL` / `ADMIN_PASSWORD`),
+the example blueprints in `samples/` (matched by title) and, with `--demo`, `demo.member@specly.local` and `demo.guest@specly.local`
+with generated passwords that are printed once (`DEMO_PASSWORD` sets one for both; refused when `NODE_ENV=production`).
+`AUTO_SEED=false` stops the server creating the admin and sample on a first start.
 
 ## Project layout
 
     server.js              entry point (startup, shutdown)
     src/app.js             Express app factory (middleware order lives here)
     src/config.js          the only place environment variables are read
-    src/db.js, db/schema.sql   PostgreSQL pool, transactions, idempotent schema
+    src/db.js              PostgreSQL pool and transactions
+    src/migrate.js, db/migrations/   versioned SQL migrations; src/seed.js starter data
     src/lib/               http helpers, validation, security (CSRF, rate limits, headers)
     src/services/          auth, access rules, audit log, blueprints (save/versions/diff), share links, Postman export, mail, notifications
     src/routes/            public (auth flows), app (account reading), reader (viewer/spec/changelog/export, also behind share links),
                            account (password, sessions, two-factor), admin/ (users, invites, requests, blueprints, audit, trash)
     views/, public/        EJS templates, Tailwind source in src/input.css
-    scripts/               seed, seed-users, reset-admin, backup
+    scripts/               migrate, seed, backup
     test/                  e2e.test.js loads test/suites/* on the harness in test/support.js; viewer.test.js; browser.test.js
 
     npm test               end-to-end + viewer + browser smoke tests (temporary database, dropped afterwards;
@@ -58,7 +82,7 @@ tokens, single-use reset/invite links, rate limits on login and forgot-password,
 - **Changelog and export**: every reader sees *what changed* per revision (endpoints added/changed/removed/deprecated) from the viewer's Changelog button, and can download the original file or a Postman collection (v2.1).
 - **Share links**: Manage → Blueprints → Access → *Share link* creates a read-only URL (1–90 days) for people without an account. It exposes that one blueprint only (no search, no other pages), can be revoked at any time, is never indexed, and only a hash of it is stored. Opening a link writes nothing to the database.
 - **Editing conflicts**: if someone saves a newer revision while you are editing, your save is refused with your text kept; tick *overwrite* to save on top anyway.
-- **Two-factor sign-in** (account menu, any user; recommended for admins): TOTP authenticator app + 10 single-use recovery codes. An admin can turn it off for someone who lost their phone (Users → Edit), and `npm run reset-admin` clears it for the admin it resets.
+- **Two-factor sign-in** (account menu, any user; recommended for admins): TOTP authenticator app + 10 single-use recovery codes. An admin can turn it off for someone who lost their phone (Users → Edit).
 - **Active sessions** (account menu): see signed-in devices, sign one out or all the others.
 - **Last admin**: the last active admin cannot be demoted, disabled or deleted, even by two admins acting at once.
 - **Search**: top bar; matches blueprints and endpoints (path, method, summary, operationId), only within blueprints the user may read.
@@ -82,7 +106,7 @@ With `NODE_ENV=production` the app refuses to start without `BASE_URL`, `DATABAS
 - **Docker**: `ADMIN_PASSWORD=choose-one docker compose up --build` runs the app and PostgreSQL (see `docker-compose.yml`). The image runs as a non-root user and has a health check.
 - **Backups**: `npm run backup` writes `backups/specly-<timestamp>.dump` (keeps the newest `BACKUP_KEEP`, default 14; `BACKUP_DIR` to change the folder). Restore with `pg_restore --clean --if-exists --no-owner -d "$DATABASE_URL" <file>`. Schedule it and copy the files off the machine.
 - **CI**: `.github/workflows/ci.yml` runs lint, the tests and a Docker build on every push and pull request (move it to the repository root if this folder is not the root).
-- **Schema**: `db/schema.sql` is idempotent and takes an advisory lock, so several instances can start at once.
+- **Schema**: versioned migrations with an advisory lock, so several instances can start at once (see above).
 
 ## Logging and the audit log
 
