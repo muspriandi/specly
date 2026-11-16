@@ -26,6 +26,7 @@
         <summary class="ibtn list-none [&::-webkit-details-marker]:hidden" title="More actions" aria-label="More actions: <%= b.title %>"><%- icon('more') %></summary>
         <div class="menu">
           <a href="/manage/blueprints/<%= b.id %>/share"><%- icon('link') %>Share links</a>
+          <a href="/manage/blueprints/<%= b.id %>/api"><%- icon('send') %>Publish from CI</a>
           <a href="/blueprints/<%= b.id %>"><%- icon('file') %>Open documentation</a>
           <a href="/manage/blueprints/<%= b.id %>/versions"><%- icon('clock') %>History</a>
         </div>

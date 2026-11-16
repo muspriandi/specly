@@ -64,7 +64,7 @@ Upload a spec, preview it, review what changed, publish. Readers get a clean, se
 <table>
 <tr>
 <td width="50%"><img src="docs/screenshots/compare.png" alt="Comparing two revisions: breaking changes listed first"></td>
-<td width="50%"><img src="docs/screenshots/api-tokens.png" alt="Publish API tokens and a curl example"></td>
+<td width="50%"><img src="docs/screenshots/api-tokens.png" alt="Publish-from-CI tokens and a curl example"></td>
 </tr>
 <tr>
 <td><sub><b>Compare any two revisions.</b> Breaking changes first: a parameter that became required, a field that disappeared, a response that changed type. Admins can also open any old revision as documentation.</sub></td>
@@ -138,7 +138,7 @@ Locked out? Use *Forgot password* (needs SMTP; in development the link is printe
 
 ## Publish from CI
 
-Manage → Blueprints → *Publish API* creates a token that can publish **one blueprint** and nothing else (it cannot read documents or reach any other blueprint). It is shown once, can expire, can be revoked, and only its hash is stored.
+Manage → Blueprints → ⋯ → *Publish from CI* creates a token that can publish **one blueprint** and nothing else (it cannot read documents or reach any other blueprint). It is shown once, can expire, can be revoked, and only its hash is stored.
 
 ```sh
 curl --fail-with-body -X PUT "https://docs.example.com/api/v1/blueprints/12" \

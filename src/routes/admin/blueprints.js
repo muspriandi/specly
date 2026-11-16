@@ -223,7 +223,7 @@ router.get('/:id/api', async (req, res) => {
   const bp = await getBlueprint(req.params.id, 'id,title');
   if (!bp) return notFound(res, 'Blueprint not found.');
   const once = takeOnce(req, res, 'newtoken', apiBack(req));
-  res.render('admin/blueprint-api', { title: `Publish API: ${bp.title}`, bp, tokens: await apitokens.listFor(bp.id), tokenDays: apitokens.DAYS, maxTokens: apitokens.MAX_ACTIVE,
+  res.render('admin/blueprint-api', { title: `Publish from CI: ${bp.title}`, bp, tokens: await apitokens.listFor(bp.id), tokenDays: apitokens.DAYS, maxTokens: apitokens.MAX_ACTIVE,
     newToken: once && /^spk_[A-Za-z0-9_-]{43}$/.test(once.token) ? once.token : null, apiUrl: `${baseUrl(req)}/api/v1/blueprints/${bp.id}` });
 });
 
