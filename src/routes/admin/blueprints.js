@@ -150,9 +150,7 @@ const back = (req) => `/manage/blueprints/${req.params.id}/access`;
 const list = (rows) => rows.map((r) => r.email).join(', ');
 const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
 
-router.get('/:id/access', async (req, res) => {
-  const bp = await getBlueprint(req.params.id, 'id,title');
-  if (!bp) return notFound(res, 'Blueprint not found.');
+const renderAccess = async (req, res, bp, extra = {}) => {
   const filter = text(req.query.q, 100);
   const role = ['member', 'guest'].includes(req.query.role) ? req.query.role : '';
   const params = [bp.id], conds = [`r.blueprint_id=$1`, `r.status='approved'`];
@@ -167,8 +165,64 @@ router.get('/:id/access', async (req, res) => {
     FROM users u WHERE u.deleted_at IS NULL AND u.active AND u.role <> 'admin'
       AND NOT EXISTS (SELECT 1 FROM access_requests r WHERE r.user_id=u.id AND r.blueprint_id=$1 AND r.status='approved')
     ORDER BY requested DESC, lower(u.name), u.id LIMIT 500`, [bp.id]);
-  res.render('admin/blueprint-access', { title: `Access: ${bp.title}`, bp, readers, candidates, pg, filter, role });
+  res.render('admin/blueprint-access', { title: `Access: ${bp.title}`, bp, readers, candidates, pg, filter, role, ...extra });
+};
+
+router.get('/:id/access', async (req, res) => {
+  const bp = await getBlueprint(req.params.id, 'id,title');
+  if (!bp) return notFound(res, 'Blueprint not found.');
+  await renderAccess(req, res, bp);
 });
+
+// ---- Share links: their own page (people without an account; see services/shares.js) ----
+// The full URL is shown once, right after creating it.
+const renderShare = async (res, bp, extra = {}) =>
+  res.render('admin/blueprint-share', { title: `Share links: ${bp.title}`, bp, links: await shares.listFor(bp.id), shareDays: shares.DAYS, maxLinks: shares.MAX_ACTIVE, newLink: null, ...extra });
+const shareBack = (req) => `/manage/blueprints/${req.params.id}/share`;
+
+// Creating a link is POST -> redirect -> GET, so refreshing the page never creates another one. The one-time URL travels in a
+// short-lived httpOnly cookie scoped to this page; the first GET that sees it shows it and clears it.
+const takeNewLink = (req, res) => {
+  const raw = req.cookies.newshare;
+  if (!raw) return null;
+  res.clearCookie('newshare', { ...cookieBase, path: shareBack(req) });
+  const [days, ...rest] = String(raw).split('|'), url = rest.join('|');
+  return /^\d{1,3}$/.test(days) && /^https?:\/\/[^\s|]+\/s\/[\w-]+$/.test(url) ? { days: Number(days), url } : null;
+};
+
+router.get('/:id/share', async (req, res) => {
+  const bp = await getBlueprint(req.params.id, 'id,title');
+  if (!bp) return notFound(res, 'Blueprint not found.');
+  await renderShare(res, bp, { newLink: takeNewLink(req, res) });
+});
+
+router.post('/:id/share', async (req, res) => {
+  const bp = await getBlueprint(req.params.id, 'id,title');
+  if (!bp) return notFound(res, 'Blueprint not found.');
+  const label = text(req.body.label, 80);
+  const made = await shares.create(bp.id, req.body.days, label, req.user.id);
+  if (!made) {
+    flash(res, `This blueprint already has ${shares.MAX_ACTIVE} active share links. Revoke one to create another.`, 'error');
+    return res.redirect(shareBack(req));
+  }
+  const { token, days } = made;
+  await audit(req, 'blueprint.share_created', { type: 'blueprint', id: bp.id, detail: `Created a read-only share link for "${bp.title}"${label ? ` (${label})` : ''}, valid ${days} day${days === 1 ? '' : 's'}` });
+  res.cookie('newshare', `${days}|${baseUrl(req)}/s/${token}`, { ...cookieBase, path: shareBack(req), maxAge: 5 * 60 * 1000 });
+  res.redirect(shareBack(req));
+});
+
+// Revoke one link (/share/:sid/revoke) or several (/share/revoke with links[]).
+const revokeLinks = (pick) => async (req, res) => {
+  const bp = await getBlueprint(req.params.id, 'id,title');
+  if (!bp) return notFound(res, 'Blueprint not found.');
+  const done = await shares.revokeMany(pick(req), bp.id);
+  if (done.length) await audit(req, 'blueprint.share_revoked', { type: 'blueprint', id: bp.id,
+    detail: `Revoked ${done.length === 1 ? 'a share link' : `${done.length} share links`} for "${bp.title}"${done.length === 1 && done[0].label ? ` (${done[0].label})` : ''}` });
+  flash(res, done.length ? `${plural(done.length, 'share link')} revoked. ${done.length === 1 ? 'It stops' : 'They stop'} working immediately.` : 'Select at least one active link first.', done.length ? 'success' : 'error');
+  res.redirect(shareBack(req));
+};
+router.post('/:id/share/revoke', revokeLinks((req) => [].concat(req.body.links || [])));
+router.post('/:id/share/:sid/revoke', revokeLinks((req) => [req.params.sid]));
 
 router.post('/:id/access', async (req, res) => {
   const bp = await getBlueprint(req.params.id, 'id,title');

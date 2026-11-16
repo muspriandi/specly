@@ -37,8 +37,21 @@ const errorPage = (res, status, title, message) => res.status(status).render('er
 const notFound = (res, message = 'Page not found.') => errorPage(res, 404, 'Not found', message);
 const badLink = (res, title, message) => errorPage(res, 400, title, message);
 
-// Public URL for links in emails.
-const baseUrl = (req) => config.baseUrl || `${req.protocol}://${req.get('host')}`;
+// Public URL for links (emails, share links). BASE_URL wins, with one exception outside production: when it points at
+// a different port of localhost than the one you are browsing (a stale BASE_URL after changing PORT), links would lead
+// nowhere, so the address in use is taken instead.
+const LOCAL_HOSTS = ['localhost', '127.0.0.1', '[::1]'];
+const baseUrl = (req) => {
+  const here = `${req.protocol}://${req.get('host')}`;
+  if (!config.baseUrl) return here;
+  if (!config.isProd) {
+    try {
+      const configured = new URL(config.baseUrl), current = new URL(here);
+      if (LOCAL_HOSTS.includes(configured.hostname) && LOCAL_HOSTS.includes(current.hostname) && configured.host !== current.host) return here;
+    } catch { /* unparseable: fall through to BASE_URL */ }
+  }
+  return config.baseUrl;
+};
 
 // router.param handler: reject non-numeric ids with a 404 instead of hitting the database.
 function numericParam(req, res, next, value) {

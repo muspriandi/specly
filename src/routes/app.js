@@ -5,6 +5,7 @@ const { canView, blueprintsFor } = require('../services/access');
 const { audit } = require('../services/audit');
 const { notifyAdminsOfRequest } = require('../services/notify');
 const { getBlueprint } = require('../services/blueprints');
+const { readerRouter } = require('./reader');
 const { flash, notFound, errorPage, numericParam } = require('../lib/http');
 const { text } = require('../lib/validate');
 
@@ -69,31 +70,21 @@ router.get('/search/suggest', async (req, res) => {
   res.json({ blueprints, endpoints });
 });
 
-// ---- Read a blueprint ----
-// Guests without access get an explanatory 403; unknown ids get 404.
-router.get('/blueprints/:id', async (req, res) => {
-  const bp = await getBlueprint(req.params.id);
-  if (!bp) return notFound(res, 'Blueprint not found.');
+// ---- Read a blueprint (viewer, spec, source, Postman export, changelog: see reader.js) ----
+// Guests/members without access get an explanatory 403 on the page and a plain 404 on files; unknown ids get 404.
+const resolveAccount = async (req, res, kind) => {
+  const bp = await getBlueprint(req.params.id, 'id,title');
+  const asJson = kind === 'json';
+  if (!bp) { if (asJson) res.status(404).json({ error: 'Not found' }); else notFound(res, kind === 'page' ? 'Blueprint not found.' : undefined); return null; }
   if (!(await canView(req.user, bp.id))) {
-    return errorPage(res, 403, 'No access', req.user.role === 'member' ? 'This blueprint is not assigned to you. Request access from the home page.' : 'This blueprint is not assigned to you. Ask an admin to assign it.');
+    if (kind === 'page') errorPage(res, 403, 'No access', req.user.role === 'member' ? 'This blueprint is not assigned to you. Request access from the home page.' : 'This blueprint is not assigned to you. Ask an admin to assign it.');
+    else if (asJson) res.status(404).json({ error: 'Not found' });
+    else notFound(res);
+    return null;
   }
-  res.render('viewer', { title: bp.title, bp, scope: { id: bp.id, title: bp.title }, classic: req.query.view === 'swagger' });
-});
-
-router.get('/blueprints/:id/spec.json', async (req, res) => {
-  const bp = await getBlueprint(req.params.id, 'id,spec');
-  if (!bp || !(await canView(req.user, bp.id))) return res.status(404).json({ error: 'Not found' });
-  res.json(bp.spec);
-});
-
-// Download the original document as uploaded (yaml or json).
-router.get('/blueprints/:id/source', async (req, res) => {
-  const bp = await getBlueprint(req.params.id, 'id,title,format,source');
-  if (!bp || !(await canView(req.user, bp.id))) return notFound(res);
-  const name = bp.title.replace(/[^\w.-]+/g, '-').toLowerCase() || 'openapi';
-  res.set('Content-Disposition', `attachment; filename="${name}.${bp.format}"`)
-    .type(bp.format === 'json' ? 'application/json' : 'text/yaml').send(bp.source);
-});
+  return { id: bp.id, base: `/blueprints/${bp.id}` };
+};
+router.use('/blueprints/:id', readerRouter(resolveAccount));
 
 // ---- Member: request access (guests cannot; an admin assigns blueprints to them) ----
 router.post('/blueprints/:id/request', async (req, res) => {

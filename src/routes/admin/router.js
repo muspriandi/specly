@@ -8,5 +8,6 @@ module.exports = () => {
   router.param('vid', numericParam);
   router.param('uid', numericParam);
   router.param('bid', numericParam);
+  router.param('sid', numericParam);
   return router;
 };

@@ -98,6 +98,20 @@ CREATE TABLE IF NOT EXISTS access_requests (
 CREATE INDEX IF NOT EXISTS idx_requests_user ON access_requests(user_id, blueprint_id);
 
 
+-- Share links: read-only access to one blueprint for people without an account, until they expire or are revoked.
+-- Only the hash of the token is stored.
+CREATE TABLE IF NOT EXISTS share_links (
+  id SERIAL PRIMARY KEY,
+  token_hash TEXT NOT NULL UNIQUE,
+  blueprint_id INT NOT NULL REFERENCES blueprints(id) ON DELETE CASCADE,
+  label TEXT,
+  created_by INT REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  expires_at TIMESTAMPTZ NOT NULL,
+  revoked_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_share_bp ON share_links (blueprint_id);
+
 -- Every saved state of a blueprint, newest = highest version_no.
 CREATE TABLE IF NOT EXISTS blueprint_versions (
   id SERIAL PRIMARY KEY,

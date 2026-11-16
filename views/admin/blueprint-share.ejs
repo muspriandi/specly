@@ -1,0 +1,51 @@
+<%- include('../partials/head') %>
+<%- include('../partials/crumbs', { items: [['Blueprints', '/manage/blueprints'], [bp.title, null]] }) %>
+<h1 class="mb-3 text-2xl font-bold">Access</h1>
+<%- include('../partials/bp-tabs', { bp: bp, active: 'share' }) %>
+<h2 class="mb-1 font-semibold">Share links <span class="text-sm font-normal text-slate-600 dark:text-slate-400">for people without an account</span></h2>
+<p class="mb-3 text-sm text-slate-600 dark:text-slate-400">Anyone with the link can read this blueprint (read-only, no search, no other blueprints) until it expires. Revoke it at any time.</p>
+<% if (newLink) { %>
+<div class="mb-3 rounded-lg border border-emerald-600/40 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200" role="status">
+  <p class="font-medium">Link created: valid for <%= newLink.days %> day<%= newLink.days === 1 ? '' : 's' %>. Copy it now, it is not shown again.</p>
+  <div class="mt-2 flex flex-wrap items-center gap-2"><input readonly value="<%= newLink.url %>" aria-label="Share link" class="field !mt-0 min-w-0 flex-1 font-mono text-xs" data-select-all><button type="button" class="btn btn-sm" data-copy="<%= newLink.url %>">Copy link</button></div>
+</div>
+<% } %>
+<% var live = links.filter(function (l) { return l.live; }); %>
+<div class="grid items-start gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+  <section class="min-w-0" aria-label="Existing links">
+    <% if (live.length) { %>
+    <form id="bulk" method="post" action="/manage/blueprints/<%= bp.id %>/share/revoke" class="mb-3 flex flex-wrap items-center gap-2" data-confirm="Anyone using the selected links will lose access immediately." data-confirm-title="Revoke the selected links?" data-confirm-action="Revoke"><%- include('../partials/csrf') %>
+      <span class="text-sm text-slate-600 dark:text-slate-400" data-bulk-count aria-live="polite">0 selected</span>
+      <button class="btn btn-sm btn-danger" data-bulk-btn disabled><%- icon('x') %>Revoke selected</button>
+    </form>
+    <% } %>
+    <div class="card max-md:overflow-x-auto sticky-head !p-0">
+      <% if (!links.length) { %><div class="empty"><%- icon('link', 'size-8') %><p class="font-medium text-slate-800 dark:text-slate-200">No share links yet</p><p>Create one on the right to let someone without an account read this blueprint.</p></div><% } else { %>
+      <table class="w-full text-sm">
+        <caption class="sr-only">Share links for <%= bp.title %></caption>
+        <thead><tr><th scope="col" class="th w-10"><% if (live.length > 1) { %><input type="checkbox" class="size-4 accent-brand-600" data-bulk-all aria-label="Select all active links"><% } else { %><span class="sr-only">Select</span><% } %></th><th scope="col" class="th">Link</th><th scope="col" class="th">Expires</th><th scope="col" class="th">Status</th><th scope="col" class="th"><span class="sr-only">Actions</span></th></tr></thead>
+        <% links.forEach(function (l) { %>
+        <tr class="tr <%= l.live ? '' : 'opacity-60' %>">
+          <td class="td"><% if (l.live) { %><input type="checkbox" class="size-4 accent-brand-600" name="links" value="<%= l.id %>" form="bulk" data-bulk-row aria-label="Select <%= l.label || 'untitled link' %>"><% } %></td>
+          <td class="td"><div class="clip font-medium" title="<%= l.label || 'Untitled' %>"><%= l.label || 'Untitled' %></div><div class="text-xs text-slate-600 dark:text-slate-400">by <%= l.author || '—' %> · <%= fmt(l.created_at) %></div></td>
+          <td class="td text-xs text-slate-600 dark:text-slate-400"><%= fmt(l.expires_at) %></td>
+          <td class="td"><span class="badge <%= l.live ? 'badge-ok' : 'badge-neutral' %>"><%= l.revoked_at ? 'Revoked' : l.live ? 'Active' : 'Expired' %></span></td>
+          <td class="td"><% if (l.live) { %><form method="post" action="/manage/blueprints/<%= bp.id %>/share/<%= l.id %>/revoke" class="text-right" data-confirm="Anyone using this link will lose access immediately." data-confirm-title="Revoke this share link?" data-confirm-action="Revoke"><%- include('../partials/csrf') %><button class="ibtn ibtn-danger" title="Revoke" aria-label="Revoke: <%= l.label || 'untitled link' %>"><%- icon('x') %></button></form><% } %></td>
+        </tr>
+        <% }) %>
+      </table>
+      <% } %>
+    </div>
+  </section>
+  <form method="post" action="/manage/blueprints/<%= bp.id %>/share" class="card min-w-0"><%- include('../partials/csrf') %>
+    <% var liveCount = links.filter(function (l) { return l.live; }).length, full = liveCount >= maxLinks; %>
+    <h3 class="flex items-center justify-between gap-2 font-semibold">Create a link <span class="badge <%= full ? 'badge-warn' : 'badge-neutral' %>" title="Active links on this blueprint, out of the maximum"><%= liveCount %> of <%= maxLinks %> active</span></h3>
+    <% if (full) { %><p class="mt-2 text-sm text-amber-800 dark:text-amber-300" role="status">The limit is reached. Revoke a link (or wait for one to expire) to create another.</p><% } %>
+    <label class="label">Label (optional)<input class="field" name="label" maxlength="80" placeholder="e.g. Acme integration team"></label>
+    <label class="label">Valid for
+      <select class="field" name="days"><% shareDays.forEach(function (d) { %><option value="<%= d %>" <%= d === 7 ? 'selected' : '' %>><%= d === 1 ? '1 day' : d + ' days' %></option><% }) %></select>
+    </label>
+    <button class="btn" <%= full ? 'disabled' : '' %>><%- icon('link') %>Create share link</button>
+  </form>
+</div>
+<%- include('../partials/foot') %>

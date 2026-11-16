@@ -54,6 +54,19 @@ function createApp() {
   });
   app.use(csrf); // after the locals so its 403 page can render the layout
 
+  // Share links: read one blueprint without an account. GET only, throttled per IP, nothing is ever written.
+  const resolveShare = async (req, res, kind) => {
+    const found = await shares.find(req.params.token);
+    if (!found) {
+      log.warn('security', { event: 'share.invalid', req: req.id, ip: req.ip });
+      if (kind === 'json') res.status(404).json({ error: 'Not found' });
+      else errorPage(res, 404, 'Link not available', 'This link is invalid, has expired or was revoked. Ask the person who shared it for a new one.');
+      return null;
+    }
+    return { id: found.id, base: `/s/${req.params.token}` };
+  };
+  app.use('/s/:token', rateLimit({ max: 120, windowMs: 60 * 1000 }), readerRouter(resolveShare, { shared: true }));
+
   app.use(require('./routes/public'));
   app.use('/manage', require('./routes/admin'));
   app.use(require('./routes/account'));
