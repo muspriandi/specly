@@ -14,3 +14,4 @@ require('./suites/10-logging');
 require('./suites/11-migrations-and-seeds');
 require('./suites/12-security');
 require('./suites/13-publishing-and-admin');
+require('./suites/14-sso');

@@ -13,6 +13,17 @@ const config = Object.freeze({
   trustProxy: env.TRUST_PROXY === 'true',
   sessionIdleHours: env.SESSION_IDLE_HOURS === undefined || env.SESSION_IDLE_HOURS === '' ? 24 : Math.max(0, Number(env.SESSION_IDLE_HOURS)), // 0 = no idle timeout
   trashRetentionDays: env.TRASH_RETENTION_DAYS === undefined || env.TRASH_RETENTION_DAYS === '' ? 30 : Math.max(0, Number(env.TRASH_RETENTION_DAYS)), // deleted items are removed for good after this many days (0 = never)
+  // Single sign-on (OpenID Connect). Off unless all three of issuer, client id and secret are set.
+  oidc: env.OIDC_ISSUER && env.OIDC_CLIENT_ID && env.OIDC_CLIENT_SECRET ? {
+    issuer: env.OIDC_ISSUER,
+    clientId: env.OIDC_CLIENT_ID,
+    clientSecret: env.OIDC_CLIENT_SECRET,
+    name: env.OIDC_NAME || 'single sign-on',
+    scope: env.OIDC_SCOPE || 'openid email profile',
+    allowedDomains: String(env.OIDC_ALLOWED_DOMAINS || '').split(',').map((d) => d.trim().toLowerCase()).filter(Boolean), // limits WHO may sign in this way
+    autoCreate: env.OIDC_AUTO_CREATE === 'true', // create a guest account on first sign-in (needs OIDC_ALLOWED_DOMAINS)
+    allowInsecure: env.NODE_ENV !== 'production' && env.OIDC_ALLOW_INSECURE === 'true', // http issuers, development and tests only
+  } : null,
   appSecret: env.APP_SECRET || null, // encrypts two-factor secrets at rest (required in production): openssl rand -base64 32
   bcryptCost: Math.min(15, Math.max(4, Number(env.BCRYPT_COST || 12))),
   autoMigrate: env.AUTO_MIGRATE !== 'false', // apply pending migrations on start (false: refuse to start until `npm run migrate`)
@@ -46,6 +57,10 @@ const config = Object.freeze({
   },
 });
 
+if (config.oidc) {
+  if (!config.oidc.allowInsecure && !/^https:\/\//i.test(config.oidc.issuer)) throw new Error('OIDC_ISSUER must be an https:// URL.');
+  if (config.oidc.autoCreate && !config.oidc.allowedDomains.length) throw new Error('OIDC_AUTO_CREATE=true needs OIDC_ALLOWED_DOMAINS (otherwise anyone with an account at the identity provider could get in).');
+}
 if (env.APP_SECRET && env.APP_SECRET.length < 32) throw new Error('APP_SECRET must be at least 32 characters (openssl rand -base64 32).');
 
 // Production refuses to start on settings that are only safe on a developer laptop.

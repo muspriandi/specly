@@ -5,15 +5,17 @@ const auth = require('../services/auth');
 const { audit } = require('../services/audit');
 const access = require('../services/access');
 const { queueMail, background } = require('../services/mail');
-const { flash, badLink, baseUrl, cookieBase } = require('../lib/http');
+const { flash, badLink, baseUrl, cookieBase, notFound } = require('../lib/http');
 const totp = require('../lib/totp');
+const crypto = require('crypto');
+const oidc = require('../services/oidc');
 const log = require('../lib/log');
 const { rateLimit, createLimiter } = require('../lib/security');
-const { normEmail, text, passwordError, firstError } = require('../lib/validate');
+const { normEmail, isEmail, text, passwordError, firstError } = require('../lib/validate');
 
 const LOGIN_TITLE = 'Sign in';
 const renderLogin = (res, status, email, error) =>
-  res.status(status).render('login', { title: LOGIN_TITLE, email, error });
+  res.status(status).render('login', { title: LOGIN_TITLE, email, error, sso: config.oidc ? config.oidc.name : null });
 
 router.get('/login', (req, res) => {
   if (req.user) return res.redirect('/');
@@ -96,6 +98,46 @@ router.post('/login/2fa', rateLimit({ max: config.loginRateMax, windowMs: 15 * 6
   if (!(await auth.consumeToken(req.cookies.mfa, 'login2fa'))) return res.redirect('/login');
   res.clearCookie('mfa');
   await audit(req, 'auth.login', { actor: { id: u.id, email: u.email }, detail: `Signed in as ${u.role} (two-factor${viaRecovery ? ', recovery code used' : ''})`, store: u.role === 'admin' || viaRecovery });
+  await auth.startSession(res, u.id, req);
+  res.redirect('/');
+});
+
+// ---- Single sign-on (OpenID Connect), only when configured ----
+const ssoLimit = rateLimit({ max: config.loginRateMax, windowMs: 15 * 60 * 1000 });
+const ssoDenied = (req, res, reason, message, email = null) => {
+  log.warn('security', { event: 'auth.oidc_denied', req: req.id, reason, email: email ? log.maskEmail(email) : undefined, ip: req.ip });
+  return renderLogin(res, 403, '', message);
+};
+
+router.get('/auth/oidc', ssoLimit, async (req, res) => {
+  if (!config.oidc) return notFound(res);
+  if (req.user) return res.redirect('/');
+  try { res.redirect(await oidc.begin(req, res)); } catch (e) {
+    log.error('single sign-on could not start', { event: 'auth.oidc_unavailable', req: req.id, err: e });
+    renderLogin(res, 502, '', 'Single sign-on is unavailable right now. Use your password instead.');
+  }
+});
+
+router.get('/auth/oidc/callback', ssoLimit, async (req, res) => {
+  if (!config.oidc) return notFound(res);
+  let claims;
+  try { claims = await oidc.finish(req, res); } catch (e) {
+    log.warn('security', { event: 'auth.oidc_failed', req: req.id, ip: req.ip, reason: String(e.message).slice(0, 200) });
+    return renderLogin(res, 401, '', 'Single sign-on failed. Please try again.');
+  }
+  const email = normEmail(claims.email);
+  if (!isEmail(email) || claims.email_verified !== true) return ssoDenied(req, res, 'email_not_verified', 'Your identity provider did not confirm your email address, so you cannot sign in this way.', email);
+  if (!oidc.domainAllowed(email)) return ssoDenied(req, res, 'domain_not_allowed', 'Single sign-on is not available for that email domain.', email);
+  let u = await db.one('SELECT * FROM users WHERE lower(email)=$1 AND deleted_at IS NULL', [email]);
+  if (!u) {
+    if (!config.oidc.autoCreate) return ssoDenied(req, res, 'no_account', 'There is no account for that email. Ask an admin to invite you.', email);
+    const name = text(claims.name, 100) || email.split('@')[0];
+    u = await db.one(`INSERT INTO users (email,name,password_hash,role) VALUES ($1,$2,$3,'guest') RETURNING *`, [email, name, await auth.hashPassword(crypto.randomBytes(32).toString('base64url'))]); // no usable password: SSO only (until they reset it)
+    await audit(req, 'user.created', { actor: { id: u.id, email }, type: 'user', id: u.id, detail: `Created a guest account for ${email} (${name}) on first single sign-on` });
+  }
+  if (!u.active) return ssoDenied(req, res, 'account_disabled', 'That account is disabled.', email);
+  // The identity provider has authenticated them (and applies its own second factor), so the local authenticator step is skipped.
+  await audit(req, 'auth.login', { actor: { id: u.id, email: u.email }, detail: `Signed in as ${u.role} (single sign-on)`, store: u.role === 'admin' });
   await auth.startSession(res, u.id, req);
   res.redirect('/');
 });

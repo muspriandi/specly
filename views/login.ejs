@@ -12,6 +12,10 @@
     <label class="label">Password <input class="field" type="password" name="password" required autocomplete="current-password"></label>
     <button class="btn w-full">Sign in</button>
   </form>
+  <% if (typeof sso !== 'undefined' && sso) { %>
+  <div class="my-4 flex items-center gap-3 text-xs text-slate-500" aria-hidden="true"><span class="h-px flex-1 bg-slate-200 dark:bg-slate-700"></span>or<span class="h-px flex-1 bg-slate-200 dark:bg-slate-700"></span></div>
+  <a class="btn btn-ghost w-full" href="/auth/oidc"><%- icon('key') %>Sign in with <%= sso %></a>
+  <% } %>
   <p class="mt-4 text-center"><a class="link" href="/forgot">Forgot your password?</a></p>
 </div>
 </div>
