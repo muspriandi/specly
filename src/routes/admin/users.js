@@ -63,16 +63,16 @@ router.get('/:id/access', async (req, res) => {
   const u = await getUser(req.params.id);
   if (!u) return notFound(res, 'User not found.');
   const filter = text(req.query.q, 100);
-  const params = [u.id], conds = ['r.user_id=$1', `r.status='approved'`];
+  const params = [u.id], conds = ['r.user_id=$1', access.LIVE];
   if (filter) { params.push(likeOf(filter)); conds.push(`b.title ILIKE $${params.length}`); }
   const from = `FROM access_requests r JOIN blueprints b ON b.id=r.blueprint_id AND b.deleted_at IS NULL WHERE ${conds.join(' AND ')}`;
   const pg = await paginate(req, `SELECT COUNT(*)::int AS n ${from}`, params);
-  const readers = u.role === 'admin' ? [] : await db.query(`SELECT b.id, b.title, b.version, r.decided_at ${from} ORDER BY lower(b.title), b.id ${limitSql(pg)}`, params);
+  const readers = u.role === 'admin' ? [] : await db.query(`SELECT b.id, b.title, b.version, r.decided_at, r.expires_at ${from} ORDER BY lower(b.title), b.id ${limitSql(pg)}`, params);
   const candidates = u.role === 'admin' ? [] : await db.query(`
     SELECT b.id, b.title, b.version,
       EXISTS (SELECT 1 FROM access_requests r WHERE r.user_id=$1 AND r.blueprint_id=b.id AND r.status='pending') AS requested
     FROM blueprints b WHERE b.deleted_at IS NULL
-      AND NOT EXISTS (SELECT 1 FROM access_requests r WHERE r.user_id=$1 AND r.blueprint_id=b.id AND r.status='approved')
+      AND NOT EXISTS (SELECT 1 FROM access_requests r WHERE r.user_id=$1 AND r.blueprint_id=b.id AND ${access.LIVE})
     ORDER BY requested DESC, lower(b.title), b.id LIMIT 500`, [u.id]);
   res.render('admin/user-access', { title: `Access: ${u.name}`, u, readers, candidates, pg, filter });
 });
@@ -80,9 +80,11 @@ router.get('/:id/access', async (req, res) => {
 router.post('/:id/access', async (req, res) => {
   const u = await getUser(req.params.id);
   if (!u) return notFound(res, 'User not found.');
-  const done = await access.grant([u.id], [].concat(req.body.bp || []), req.user.id);
-  if (done.length) await audit(req, 'user.access_changed', { type: 'user', id: u.id, detail: `Assigned ${titles(done)} to ${u.email}` });
-  notifyAccessGranted(req, done);
+  const until = access.parseUntil(req.body.until);
+  if (until === undefined) { flash(res, 'Choose an end date in the future (within three years), or leave it empty for no end.', 'error'); return res.redirect(backTo(req)); }
+  const done = await access.grant([u.id], [].concat(req.body.bp || []), req.user.id, { expiresAt: until });
+  if (done.length) await audit(req, 'user.access_changed', { type: 'user', id: u.id, detail: `Assigned ${titles(done)} to ${u.email}${until ? ` until ${access.lastDay(until)}` : ''}` });
+  notifyAccessGranted(req, done, until);
   flash(res, done.length ? `Assigned ${plural(done.length, 'blueprint')}.` : 'Select at least one blueprint to assign.', done.length ? 'success' : 'error');
   res.redirect(backTo(req));
 });

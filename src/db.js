@@ -89,8 +89,9 @@ async function purgeExpired() {
   ]);
   const audit = config.auditRetentionDays > 0
     ? await run(`DELETE FROM audit_log WHERE at < now() - ($1 || ' days')::interval`, [String(config.auditRetentionDays)]) : 0;
-  const removed = { sessions, tokens, shareLinks, auditRows: audit };
-  if (sessions + tokens + shareLinks + audit > 0) log.info('purged expired data', { event: 'db.purge', ...removed });
+  const ended = await run(`UPDATE access_requests SET status='rejected', decided_at=now() WHERE status='approved' AND expires_at <= now()`); // time-limited access that ran out
+  const removed = { sessions, tokens, shareLinks, auditRows: audit, accessEnded: ended };
+  if (sessions + tokens + shareLinks + audit + ended > 0) log.info('purged expired data', { event: 'db.purge', ...removed });
   return removed;
 }
 

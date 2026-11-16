@@ -31,7 +31,7 @@ router.get('/', async (req, res) => {
 
 // ---- Search ----
 // SQL access filter shared by the search queries: $3 = user id, $4 = user is restricted (not an admin).
-const READABLE = `(NOT $4 OR EXISTS (SELECT 1 FROM access_requests r WHERE r.user_id=$3 AND r.blueprint_id=e.blueprint_id AND r.status='approved'))`;
+const READABLE = `(NOT $4 OR EXISTS (SELECT 1 FROM access_requests r WHERE r.user_id=$3 AND r.blueprint_id=e.blueprint_id AND r.status='approved' AND (r.expires_at IS NULL OR r.expires_at > now())))`;
 // Global by default. With ?bp=<id> (sent from a blueprint's page) the search is limited to that blueprint's endpoints.
 // Returns { id, title } for a readable blueprint, null when unscoped, or false when the scope is invalid/forbidden.
 async function searchScope(req) {
@@ -115,6 +115,8 @@ router.post('/blueprints/:id/unwatch', watching(false));
 router.post('/blueprints/:id/request', async (req, res) => {
   const bp = await getBlueprint(req.params.id, 'id,title');
   if (!bp) return notFound(res, 'Blueprint not found.');
+  // an access that has ended is closed for good first, so a new request can be made (only one live row per person and blueprint)
+  await db.query(`UPDATE access_requests SET status='rejected', decided_at=now() WHERE user_id=$1 AND blueprint_id=$2 AND status='approved' AND expires_at <= now()`, [req.user.id, bp.id]);
   const existing = await db.one(`SELECT 1 FROM access_requests WHERE user_id=$1 AND blueprint_id=$2 AND status IN ('pending','approved')`,
     [req.user.id, bp.id]);
   if (req.user.role === 'guest') return errorPage(res, 403, 'Not allowed', 'Guests cannot request access. Ask an admin to assign the blueprint to you.');

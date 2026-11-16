@@ -18,13 +18,14 @@
       <% if (!readers.length) { %><div class="empty"><%- icon('users', 'size-8') %><p class="font-medium text-slate-800 dark:text-slate-200"><%= filter || role ? 'No assigned users match these filters.' : 'No members or guests can read this yet' %></p><% if (!filter && !role) { %><p>Pick people under “Assign users” to give them access.</p><% } %></div><% } else { %>
       <table class="w-full text-sm">
         <caption class="sr-only">Users who can read <%= bp.title %></caption>
-        <thead class="border-b border-slate-200 dark:border-slate-800"><tr><th scope="col" class="th w-10"><input type="checkbox" class="size-4 accent-brand-600" data-bulk-all aria-label="Select all users on this page"></th><th scope="col" class="th">User</th><th scope="col" class="th">Role</th><th scope="col" class="th">Since</th><th scope="col" class="th"><span class="sr-only">Actions</span></th></tr></thead>
+        <thead class="border-b border-slate-200 dark:border-slate-800"><tr><th scope="col" class="th w-10"><input type="checkbox" class="size-4 accent-brand-600" data-bulk-all aria-label="Select all users on this page"></th><th scope="col" class="th">User</th><th scope="col" class="th">Role</th><th scope="col" class="th">Since</th><th scope="col" class="th">Access until</th><th scope="col" class="th"><span class="sr-only">Actions</span></th></tr></thead>
         <% readers.forEach(function (r) { %>
         <tr class="tr <%= r.active ? '' : 'opacity-60' %>">
           <td class="td"><input type="checkbox" class="size-4 accent-brand-600" name="users" value="<%= r.id %>" form="bulk" data-bulk-row aria-label="Select <%= r.name %>"></td>
           <td class="td"><div class="clip block font-medium" title="<%= r.name %>"><%= r.name %></div><div class="clip block text-xs text-slate-600 dark:text-slate-400" title="<%= r.email %>"><%= r.email %></div></td>
           <td class="td"><span class="badge <%= r.role === 'member' ? 'badge-ok' : 'badge-neutral' %>"><%= r.role %></span><% if (!r.active) { %> <span class="badge badge-bad">Disabled</span><% } %></td>
           <td class="td text-xs text-slate-600 dark:text-slate-400"><%= r.decided_at ? fmt(r.decided_at) : '—' %></td>
+          <td class="td text-xs text-slate-600 dark:text-slate-400"><%= r.expires_at ? fmt(new Date(new Date(r.expires_at).getTime() - 1)).replace(/, \d\d:\d\d.*$/, '') : 'No end' %></td>
           <td class="td"><form method="post" action="/manage/blueprints/<%= bp.id %>/access/<%= r.id %>/revoke" class="text-right"><%- include('../partials/csrf') %><button class="ibtn ibtn-danger" title="Un-assign" aria-label="Un-assign: <%= r.name %>"><%- icon('x') %></button></form></td>
         </tr>
         <% }) %>
@@ -49,6 +50,7 @@
         <% }) %>
       </div>
       <% if (candidates.length === 500) { %><p class="hint mt-1">Showing the first 500 users. Use the filter above.</p><% } %>
+      <label class="label mt-3">Access until <span class="font-normal text-slate-500">(optional)</span><input class="field sm:max-w-xs" type="date" name="until" min="<%= new Date(Date.now() + 86400000).toISOString().slice(0, 10) %>"><span class="hint">Access ends at the end of that day (UTC). Leave empty for no end.</span></label>
       <button class="btn mt-3"><%- icon('plus') %>Assign selected</button>
     </form>
     <% } %>
