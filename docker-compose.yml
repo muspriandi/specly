@@ -1,4 +1,5 @@
-# Quick production-like run:  ADMIN_PASSWORD='choose-one' docker compose up --build
+# Quick production-like run:  APP_SECRET="$(openssl rand -base64 32)" docker compose up --build
+# (leave ADMIN_PASSWORD empty to get a generated admin password in the log, or set one of 12+ characters)
 # The app listens on http://localhost:3000. Data lives in the "pgdata" volume.
 services:
   db:
@@ -26,7 +27,8 @@ services:
       DATABASE_URL: postgresql://specly:${DB_PASSWORD:-specly}@db:5432/specly
       BASE_URL: ${BASE_URL:-http://localhost:3000}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@specly.local}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD for the first-run admin account}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      APP_SECRET: ${APP_SECRET:?set APP_SECRET, it encrypts two-factor secrets (openssl rand -base64 32)}
       # Set SMTP_HOST (and the other SMTP_* values) for real email. Without it, production mode refuses to start
       # unless ALLOW_CONSOLE_MAIL=true, which prints emails (including reset links) to the container log: demo only.
       SMTP_HOST: ${SMTP_HOST:-}

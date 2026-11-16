@@ -28,12 +28,18 @@ function createApp() {
     res.status(ok ? 200 : 503).set('Cache-Control', 'no-store').json({ status: ok ? 'ok' : 'unavailable' });
   });
   app.use(headers);
+  app.use((req, res, next) => { // browser features this app never uses are switched off
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), interest-cohort=()');
+    next();
+  });
   app.use('/static/swagger', express.static(swaggerUiDist.getAbsoluteFSPath(), { index: false }));
   // Markdown rendering for descriptions (client side), served from node_modules.
   app.use('/static/vendor/marked', express.static(path.dirname(require.resolve('marked'))));
   app.use('/static/vendor/dompurify', express.static(path.dirname(require.resolve('dompurify'))));
   app.use('/static', express.static(path.join(__dirname, '..', 'public')));
 
+  // Everything below /static is dynamic and often personal (accounts, access lists, specs): browsers and proxies must not keep it.
+  app.use((req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
   app.use(express.urlencoded({ extended: false, limit: '1mb' }));
   app.use(cookieParser());
   app.use(auth.loadUser);

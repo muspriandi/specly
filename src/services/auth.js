@@ -10,10 +10,30 @@ const sha = (s) => crypto.createHash('sha256').update(String(s)).digest('hex');
 const newToken = () => crypto.randomBytes(32).toString('base64url');
 
 // ---- passwords (async so hashing never blocks the event loop) ----
-const hashPassword = (pw) => bcrypt.hash(pw, 10);
-const DUMMY_HASH = bcrypt.hashSync('timing-equalizer', 10);
+const config = require('../config');
+const secrets = require('../lib/secrets');
+const hashPassword = (pw) => bcrypt.hash(pw, config.bcryptCost);
+const DUMMY_HASH = bcrypt.hashSync('timing-equalizer', config.bcryptCost);
 // Compare against a dummy hash when the user doesn't exist so response time doesn't reveal valid emails.
 const checkPassword = (pw, hash) => bcrypt.compare(String(pw), hash || DUMMY_HASH).then((ok) => ok && !!hash);
+
+// After a successful sign-in: if the stored hash is weaker than the current cost setting, store a fresh one.
+async function upgradeHash(userId, password, hash, cost = config.bcryptCost) {
+  if (!hash || bcrypt.getRounds(hash) >= cost) return false;
+  await db.query('UPDATE users SET password_hash=$2 WHERE id=$1', [userId, await bcrypt.hash(password, cost)]);
+  return true;
+}
+
+// The user's two-factor seed in clear (it is encrypted at rest when APP_SECRET is set). A seed stored before encryption
+// was switched on is encrypted the first time it is read.
+function totpSecretOf(row) {
+  if (!row || !row.totp_secret) return null;
+  const clear = secrets.open(row.totp_secret);
+  if (!secrets.isSealed(row.totp_secret) && config.appSecret && row.id) {
+    db.query('UPDATE users SET totp_secret=$2 WHERE id=$1 AND totp_secret=$3', [row.id, secrets.seal(clear), row.totp_secret]).catch(() => {});
+  }
+  return clear;
+}
 
 // ---- sessions ----
 async function startSession(res, userId, req = null) {
@@ -31,9 +51,16 @@ async function loadUser(req, res, next) {
   const token = req.cookies.sid;
   if (token) {
     req.user = await db.one(`
-      SELECT u.id, u.email, u.name, u.role FROM sessions s
+      SELECT u.id, u.email, u.name, u.role, s.last_seen_at FROM sessions s
       JOIN users u ON u.id = s.user_id
-      WHERE s.token_hash=$1 AND s.expires_at > now() AND u.active AND u.deleted_at IS NULL`, [sha(token)]);
+      WHERE s.token_hash=$1 AND s.expires_at > now()
+        AND ($2::int = 0 OR s.last_seen_at > now() - ($2::int * interval '1 hour'))
+        AND u.active AND u.deleted_at IS NULL`, [sha(token), config.sessionIdleHours]);
+    // Keep an active session alive without writing on every request: only when it was last touched more than five minutes ago.
+    if (req.user) {
+      if (Date.now() - new Date(req.user.last_seen_at).getTime() > 5 * 60 * 1000) db.query('UPDATE sessions SET last_seen_at=now() WHERE token_hash=$1', [sha(token)]).catch(() => {});
+      delete req.user.last_seen_at;
+    }
   }
   next();
 }
@@ -72,6 +99,6 @@ const requireToken = (type, title, message) => async (req, res, next) => {
 const loginFailures = createLimiter({ max: 10, windowMs: 15 * 60 * 1000 });
 
 module.exports = {
-  hashPassword, checkPassword, passwordError, sha, startSession, endSession, endAllSessions, loadUser,
+  hashPassword, checkPassword, upgradeHash, totpSecretOf, passwordError, sha, startSession, endSession, endAllSessions, loadUser,
   requireLogin, requireAdmin, issueToken, findToken, consumeToken, requireToken, loginFailures,
 };

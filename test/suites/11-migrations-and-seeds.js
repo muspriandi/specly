@@ -10,6 +10,7 @@ const seed = require('../../src/seed');
 const { db, Client, dropDatabase } = require('../support');
 
 const ROOT = path.join(__dirname, '..', '..');
+const ALL = migrate.loadFiles(migrate.DEFAULT_DIR).map((m) => m.file); // every migration in db/migrations, in order
 const urlFor = (name) => process.env.DATABASE_URL.replace(/\/[^/]*$/, `/${name}`);
 
 // A throwaway database (the shared test one must not be touched by migration experiments).
@@ -33,12 +34,13 @@ const run = (args, env) => spawnSync(process.execPath, args, { cwd: ROOT, encodi
 test('migrations: the baseline builds the whole schema on an empty database, then nothing is applied twice', async () => {
   const s = await scratch('fresh');
   try {
-    assert.deepEqual(await migrate.up(s.pool), ['001_baseline.sql']);
+    assert.deepEqual(await migrate.up(s.pool), ALL, 'every migration is applied, in order');
     const t = await tables(s.pool);
     for (const name of ['users', 'blueprints', 'endpoints', 'access_requests', 'share_links', 'audit_log', 'schema_migrations']) assert.ok(t.includes(name), name);
     assert.deepEqual(await migrate.up(s.pool), [], 'a second run is a no-op');
     const rows = await migrate.status(s.pool);
-    assert.equal(rows.length, 1);
+    assert.equal(rows.length, ALL.length);
+    assert.ok(rows.every((r) => r.applied && !r.changed));
     assert.deepEqual([rows[0].version, rows[0].name, rows[0].applied, rows[0].changed], ['001', 'baseline', true, false]);
     assert.match((await s.pool.query('SELECT checksum FROM schema_migrations')).rows[0].checksum, /^[0-9a-f]{64}$/);
   } finally { await s.drop(); }
@@ -50,7 +52,7 @@ test('migrations: a database created by the old schema.sql is adopted without ch
     await s.pool.query(fs.readFileSync(path.join(migrate.DEFAULT_DIR, '001_baseline.sql'), 'utf8')); // what schema.sql used to do
     await s.pool.query(`INSERT INTO users (email,name,password_hash,role) VALUES ('old@example.com','Old','x','admin')`);
     assert.ok(!(await tables(s.pool)).includes('schema_migrations'));
-    assert.deepEqual(await migrate.up(s.pool), ['001_baseline.sql'], 'recorded as applied');
+    assert.deepEqual(await migrate.up(s.pool), ALL, 'the baseline is recorded as applied and the newer migrations are applied on top');
     assert.equal((await s.pool.query('SELECT COUNT(*)::int AS n FROM users')).rows[0].n, 1, 'data untouched');
   } finally { await s.drop(); }
 });
@@ -113,10 +115,10 @@ test('onboarding: migrate, seed and start on a brand new database (the real CLIs
     const env = { DATABASE_URL: s.url, NODE_ENV: 'development' };
     const status0 = run(['scripts/migrate.js', 'status'], env);
     assert.match(status0.stdout, /· 001\s+baseline\s+pending/);
-    assert.match(status0.stdout, /1 pending/);
+    assert.match(status0.stdout, new RegExp(`${ALL.length} pending`));
     const up = run(['scripts/migrate.js'], env);
     assert.equal(up.status, 0, up.stderr);
-    assert.match(up.stdout, /Applied 1 migration\(s\)[\s\S]*001_baseline\.sql/);
+    assert.match(up.stdout, new RegExp(`Applied ${ALL.length} migration\\(s\\)[\\s\\S]*001_baseline\\.sql`));
     assert.match(run(['scripts/migrate.js'], env).stdout, /Already up to date/);
     assert.match(run(['scripts/migrate.js', 'status'], env).stdout, /Up to date/);
 
@@ -167,7 +169,7 @@ test('first start: the server creates the admin and one sample once; AUTO_SEED a
   const s4 = await scratch('manual');
   try {
     const blocked = run(['-e', boot], { DATABASE_URL: s4.url, AUTO_MIGRATE: 'false' });
-    assert.match(blocked.stdout, /ERROR 1 pending migration\(s\): 001_baseline\.sql\. Run: npm run migrate/);
+    assert.match(blocked.stdout, new RegExp(`ERROR ${ALL.length} pending migration\\(s\\): 001_baseline\\.sql.*Run: npm run migrate`));
     assert.equal(run(['scripts/migrate.js'], { DATABASE_URL: s4.url }).status, 0);
     assert.match(run(['-e', boot], { DATABASE_URL: s4.url, AUTO_MIGRATE: 'false' }).stdout, /COUNTS 1 1/, 'after migrating, it starts');
   } finally { await s4.drop(); }
@@ -214,6 +216,6 @@ test('demo accounts: own passwords, they can sign in, roles behave, and they are
   assert.ok(again.users.every((u) => !u.created && !u.password), 'a second run changes nothing');
   await assert.rejects(() => seed.seedDemo({ password: 'weak' }), /DEMO_PASSWORD/);
   const prod = run(['-e', `require('./src/seed').seedDemo().then(() => console.log('CREATED'), (e) => console.log('REFUSED', e.message))`],
-    { NODE_ENV: 'production', BASE_URL: 'https://docs.example.com', SMTP_HOST: 'smtp.example.com', DATABASE_URL: process.env.DATABASE_URL });
+    { NODE_ENV: 'production', BASE_URL: 'https://docs.example.com', SMTP_HOST: 'smtp.example.com', DATABASE_URL: process.env.DATABASE_URL, ADMIN_PASSWORD: '' });
   assert.match(prod.stdout, /REFUSED Demo accounts are for development/);
 });

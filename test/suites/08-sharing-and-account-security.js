@@ -102,7 +102,9 @@ test('two-factor sign-in: set up, required at login, codes are single-use, recov
   assert.equal((await me.post('/account/2fa/start', {})).status, 302);
   const setup = await me.get('/account/2fa');
   assert.match(setup.text, /<svg/, 'QR code is shown');
-  const secret = (await db.one(`SELECT totp_secret FROM users WHERE email='mfa@example.com'`)).totp_secret;
+  const sealed = (await db.one(`SELECT totp_secret FROM users WHERE email='mfa@example.com'`)).totp_secret;
+  assert.match(sealed, /^enc:v1:/, 'the two-factor seed is encrypted in the database');
+  const secret = require('../../src/lib/secrets').open(sealed);
   assert.equal((await me.post('/account/2fa/enable', { code: '000000' })).status, 400, 'wrong code does not enable it');
   const now = totp.stepNow();
   const enabled = await me.post('/account/2fa/enable', { code: totp.codeAt(secret, now) });
@@ -162,7 +164,7 @@ test('two-factor sign-in: set up, required at login, codes are single-use, recov
   assert.equal((await new Client().login('mfa@example.com', 'Admin1234')).location, '/', 'back to password-only');
 
   // admin can switch it off for someone who lost their phone
-  await db.query(`UPDATE users SET totp_secret=$1, totp_enabled_at=now() WHERE email='mfa@example.com'`, [secret]);
+  await db.query(`UPDATE users SET totp_secret=$1, totp_enabled_at=now() WHERE email='mfa@example.com'`, [require('../../src/lib/secrets').seal(secret)]);
   const uid = (await db.one(`SELECT id FROM users WHERE email='mfa@example.com'`)).id;
   assert.match((await admin.get(`/manage/users/${uid}/edit`)).text, /Turn off two-factor/);
   assert.equal((await admin.post(`/manage/users/${uid}/2fa-reset`, {})).status, 302);

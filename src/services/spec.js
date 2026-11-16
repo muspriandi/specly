@@ -49,6 +49,31 @@ function jsonErrorAt(src) {
   try { value(); ws(); if (i < src.length) fail(); return -1; } catch (at) { return typeof at === 'number' ? at : -1; }
 }
 
+// YAML aliases are shared references, so a tiny file can describe a document that is astronomically large once it is
+// walked or stringified ("billion laughs"): a 600-byte file made JSON.stringify exhaust memory and kill the process.
+// This measures the EXPANDED size (memoised per object, so the check itself is linear) and rejects documents that are
+// too big, too deep or circular, before anything else touches them.
+const MAX_NODES = 1_500_000, MAX_DEPTH = 120;
+function assertBounded(root) {
+  const memo = new Map(), active = new Set();
+  const size = (node, depth) => {
+    if (node === null || typeof node !== 'object') return 1;
+    if (memo.has(node)) return memo.get(node);
+    if (active.has(node)) throw new Error('The document contains a circular reference (a YAML alias that points at its own parent).');
+    if (depth > MAX_DEPTH) throw new Error(`The document is nested more than ${MAX_DEPTH} levels deep.`);
+    active.add(node);
+    let n = 1;
+    for (const v of Array.isArray(node) ? node : Object.values(node)) {
+      n += size(v, depth + 1);
+      if (n > MAX_NODES) throw new Error(`The document expands to more than ${MAX_NODES.toLocaleString('en-US')} values (a YAML alias bomb?) and was rejected.`);
+    }
+    active.delete(node);
+    memo.set(node, n);
+    return n;
+  };
+  size(root, 0);
+}
+
 function parseSpec(text) {
   const trimmed = String(text || '').trim();
   const lead = (String(text || '').match(/^\s*/)[0].match(/\n/g) || []).length; // blank lines removed by trim()
@@ -76,6 +101,7 @@ function parseSpec(text) {
   if (!spec || typeof spec !== 'object' || Array.isArray(spec)) {
     throw new Error('The document must be an object.');
   }
+  assertBounded(spec);
   const version = String(spec.openapi || spec.swagger || '');
   if (!/^(2\.0|3\.\d+(\.\d+)?)/.test(version)) {
     throw new Error('Missing or unsupported "openapi" / "swagger" version field.');
@@ -110,4 +136,4 @@ function listEndpoints(spec) {
   return out;
 }
 
-module.exports = { parseSpec, listEndpoints };
+module.exports = { parseSpec, listEndpoints, assertBounded, MAX_NODES };

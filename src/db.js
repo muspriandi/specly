@@ -83,7 +83,7 @@ const ping = () => pool.query('SELECT 1').then(() => true, () => false);
 async function purgeExpired() {
   const run = async (sql, params = []) => (await pool.query(sql, params)).rowCount;
   const [sessions, tokens, shareLinks] = await Promise.all([
-    run('DELETE FROM sessions WHERE expires_at < now()'),
+    run(`DELETE FROM sessions WHERE expires_at < now() OR ($1::int > 0 AND last_seen_at < now() - ($1::int * interval '1 hour'))`, [config.sessionIdleHours]),
     run('DELETE FROM tokens WHERE expires_at < now()'),
     run(`DELETE FROM share_links WHERE expires_at < now() - interval '30 days'`),
   ]);

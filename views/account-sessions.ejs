@@ -5,12 +5,13 @@
   <div class="card overflow-x-auto !p-0">
     <table class="w-full text-sm">
       <caption class="sr-only">Your signed-in devices</caption>
-      <thead class="border-b border-slate-200 dark:border-slate-800"><tr><th scope="col" class="th">Device</th><th scope="col" class="th">IP address</th><th scope="col" class="th">Signed in</th><th scope="col" class="th"><span class="sr-only">Actions</span></th></tr></thead>
+      <thead class="border-b border-slate-200 dark:border-slate-800"><tr><th scope="col" class="th">Device</th><th scope="col" class="th">IP address</th><th scope="col" class="th">Signed in</th><th scope="col" class="th">Last active</th><th scope="col" class="th"><span class="sr-only">Actions</span></th></tr></thead>
       <% sessions.forEach(function (s) { %>
       <tr class="tr">
         <td class="td"><span class="font-medium"><%= s.device %></span><% if (s.current) { %> <span class="badge badge-ok">This device</span><% } %></td>
         <td class="td font-mono text-xs text-slate-600 dark:text-slate-400"><%= s.ip || '—' %></td>
         <td class="td text-xs text-slate-600 dark:text-slate-400"><%= fmt(s.created_at) %></td>
+        <td class="td text-xs text-slate-600 dark:text-slate-400"><%= fmt(s.last_seen_at) %></td>
         <td class="td text-right"><% if (!s.current) { %><form method="post" action="/account/sessions/revoke"><%- include('partials/csrf') %><input type="hidden" name="id" value="<%= s.id %>"><button class="link-danger">Sign out</button></form><% } %></td>
       </tr>
       <% }) %>

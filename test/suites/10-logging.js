@@ -127,7 +127,7 @@ test('output format: JSON lines in production, readable text otherwise; level fi
   const SCRIPT = `const log = require('./src/lib/log'); log.debug('quiet'); log.info('hello', { event: 'x.y', email: log.maskEmail('jane.doe@example.com'), err: new Error('boom') }); log.warn('careful', { n: 1 });`;
   const out = (env) => { const r = spawnSync(process.execPath, ['-e', SCRIPT], { cwd: ROOT, env: { ...process.env, ...env }, encoding: 'utf8' }); return { stdout: r.stdout, stderr: r.stderr }; };
 
-  const json = out({ NODE_ENV: 'production', LOG_FORMAT: 'json', LOG_LEVEL: 'info', BASE_URL: 'https://x.test', DATABASE_URL: 'postgresql://a@b/c', SMTP_HOST: 'smtp.test' });
+  const json = out({ NODE_ENV: 'production', LOG_FORMAT: 'json', LOG_LEVEL: 'info', BASE_URL: 'https://x.test', DATABASE_URL: 'postgresql://a@b/c', SMTP_HOST: 'smtp.test', ADMIN_PASSWORD: '' });
   const info = JSON.parse(json.stdout.trim());
   assert.equal(info.level, 'info'); assert.equal(info.msg, 'hello'); assert.equal(info.event, 'x.y');
   assert.match(info.t, /^\d{4}-\d\d-\d\dT/);

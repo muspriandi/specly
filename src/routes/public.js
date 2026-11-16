@@ -42,6 +42,7 @@ router.post('/login', rateLimit({ max: config.loginRateMax, windowMs: 15 * 60 * 
     return renderLogin(res, 401, email, 'Invalid email or password.');
   }
   auth.loginFailures.reset(key);
+  await auth.upgradeHash(u.id, password, u.password_hash).catch(() => {});
   if (u.totp_enabled_at) { // right password, but a second factor is needed: no session yet, only a 5-minute pending token
     const pending = await auth.issueToken({ type: 'login2fa', email: u.email.toLowerCase(), userId: u.id, ttlHours: 5 / 60 });
     res.cookie('mfa', pending, { ...cookieBase, maxAge: 5 * 60 * 1000 });
@@ -80,7 +81,7 @@ router.post('/login/2fa', rateLimit({ max: config.loginRateMax, windowMs: 15 * 6
   }
   const code = String(req.body.code || '');
   let ok = false, viaRecovery = false;
-  const step = totp.verify(u.totp_secret, code, u.totp_last_step);
+  const step = totp.verify(auth.totpSecretOf(u), code, u.totp_last_step);
   if (step) { // record the step atomically so the same code cannot be used twice, even in parallel
     ok = (await db.query('UPDATE users SET totp_last_step=$2 WHERE id=$1 AND (totp_last_step IS NULL OR totp_last_step < $2) RETURNING id', [u.id, step])).length > 0;
   } else if ((u.recovery_codes || []).includes(totp.recoveryHash(code))) {

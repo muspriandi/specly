@@ -8,6 +8,8 @@ const dbName = `specly_test_${process.pid}`;
 process.env.DATABASE_URL = base.replace(/\/[^/]*$/, `/${dbName}`);
 process.env.ADMIN_PASSWORD = 'Admin1234';
 process.env.NODE_ENV = 'test';
+process.env.BCRYPT_COST = '4'; // fast hashing: the suites sign in hundreds of times
+process.env.APP_SECRET = 'test-app-secret-0123456789abcdef0123456789';
 process.env.LOGIN_RATE_MAX = '10000'; // every test signs in from the same address
 
 const db = require('../src/db');

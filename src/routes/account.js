@@ -9,6 +9,7 @@ const QRCode = require('qrcode');
 const totp = require('../lib/totp');
 const { describeAgent } = require('../lib/ua');
 const log = require('../lib/log');
+const secrets = require('../lib/secrets');
 
 // Self-service for any signed-in user (admin, member or guest).
 router.use('/account', auth.requireLogin);
@@ -49,7 +50,7 @@ router.post('/account/password', rateLimit({ max: 30, windowMs: 15 * 60 * 1000 }
 // ---- Active sessions: see where you are signed in and end any of them ----
 router.get('/account/sessions', async (req, res) => {
   const mine = auth.sha(req.cookies.sid || '');
-  const sessions = (await db.query(`SELECT left(token_hash, 16) AS id, created_at, ip, user_agent, (token_hash=$2) AS current
+  const sessions = (await db.query(`SELECT left(token_hash, 16) AS id, created_at, last_seen_at, ip, user_agent, (token_hash=$2) AS current
     FROM sessions WHERE user_id=$1 AND expires_at > now() ORDER BY (token_hash=$2) DESC, created_at DESC`, [req.user.id, mine]))
     .map((x) => ({ ...x, device: describeAgent(x.user_agent) }));
   res.render('account-sessions', { title: 'Active sessions', sessions });
@@ -72,7 +73,11 @@ router.post('/account/sessions/revoke-others', async (req, res) => {
 // ---- Two-factor sign-in (authenticator app) ----
 // Wrong codes / passwords here are throttled per account (not audited: they are unbounded and attacker-triggered).
 const twoFactorFails = createLimiter({ max: 5, windowMs: 15 * 60 * 1000 });
-const me = (id) => db.one('SELECT id, email, password_hash, totp_secret, totp_enabled_at, totp_last_step, recovery_codes FROM users WHERE id=$1', [id]);
+const me = async (id) => {
+  const row = await db.one('SELECT id, email, password_hash, totp_secret, totp_enabled_at, totp_last_step, recovery_codes FROM users WHERE id=$1', [id]);
+  if (row && row.totp_secret) row.totp_secret = auth.totpSecretOf(row); // clear text in memory only
+  return row;
+};
 
 async function page2fa(req, res, status = 200, extra = {}) {
   const u = await me(req.user.id);
@@ -114,7 +119,7 @@ router.get('/account/2fa', (req, res) => {
 
 router.post('/account/2fa/start', async (req, res) => {
   const u = await me(req.user.id);
-  if (!u.totp_enabled_at) await db.query('UPDATE users SET totp_secret=$2 WHERE id=$1', [u.id, totp.newSecret()]);
+  if (!u.totp_enabled_at) await db.query('UPDATE users SET totp_secret=$2 WHERE id=$1', [u.id, secrets.seal(totp.newSecret())]);
   res.redirect('/account/2fa');
 });
 

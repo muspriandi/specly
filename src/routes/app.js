@@ -8,8 +8,12 @@ const { getBlueprint } = require('../services/blueprints');
 const { readerRouter } = require('./reader');
 const { flash, notFound, errorPage, numericParam } = require('../lib/http');
 const { text } = require('../lib/validate');
+const { likeOf } = require('../lib/paginate');
+const { rateLimit } = require('../lib/security');
 
 router.use(requireLogin);
+// Search runs substring queries: cap them per signed-in user so one account cannot hammer the database.
+const searchLimit = rateLimit({ max: 240, windowMs: 60 * 1000, key: (req) => `u${req.user.id}` });
 router.param('id', numericParam);
 
 router.get('/', async (req, res) => {
@@ -33,7 +37,7 @@ async function searchScope(req) {
 // trigram-indexed substring match, so adding a substring match on the method too would force a full table scan.
 const METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS', 'TRACE']);
 
-router.get('/search', async (req, res) => {
+router.get('/search', searchLimit, async (req, res) => {
   const q = text(req.query.q, 100);
   const scope = await searchScope(req);
   if (scope === false) return notFound(res, 'Blueprint not found.');
@@ -52,7 +56,7 @@ router.get('/search', async (req, res) => {
 });
 
 // Type-ahead for the header search: a few blueprints and endpoints the user may read. GET /search/suggest?q=
-router.get('/search/suggest', async (req, res) => {
+router.get('/search/suggest', searchLimit, async (req, res) => {
   const q = text(req.query.q, 100);
   const scope = await searchScope(req);
   if (q.length < 2 || scope === false) return res.json({ blueprints: [], endpoints: [] });
