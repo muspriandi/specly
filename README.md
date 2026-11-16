@@ -5,7 +5,7 @@ Upload a spec, preview it, review what changed, publish. Readers get a clean, se
 
 <p align="center">
   <a href="https://github.com/muspriandi/specly/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/muspriandi/specly/actions/workflows/ci.yml/badge.svg"></a>
-  <img alt="Node 20+" src="https://img.shields.io/badge/node-20%2B-339933?logo=node.js&logoColor=white">
+  <img alt="Node 22+" src="https://img.shields.io/badge/node-22%2B-339933?logo=node.js&logoColor=white">
   <img alt="PostgreSQL" src="https://img.shields.io/badge/postgresql-14%2B-4169E1?logo=postgresql&logoColor=white">
   <img alt="OpenAPI 3.x and Swagger 2.0" src="https://img.shields.io/badge/openapi-3.x%20%7C%20swagger%202.0-6BA539?logo=openapiinitiative&logoColor=white">
 </p>
@@ -15,8 +15,8 @@ Upload a spec, preview it, review what changed, publish. Readers get a clean, se
 ## What you get
 
 - **A reference people enjoy reading.** Folders and endpoints, request and response schemas, and example calls in cURL, JavaScript and Python. Light and dark, works on a phone.
-- **A publish flow with a safety net.** Edit, preview on desktop/tablet/phone, review exactly which endpoints were added, changed or removed, then publish. Every save is a revision you can read, download or restore.
-- **Access you control.** Admins, members and guests; blueprints are assigned per person; members can request more; read-only share links for people outside your team.
+- **A publish flow with a safety net.** Edit, preview on desktop/tablet/phone, review exactly which endpoints were added, changed or removed (and which changes can **break clients**), then publish. Every save is a revision you can read, compare, download or restore. Pipelines can publish too.
+- **Access you control.** Admins, members and guests; blueprints are assigned per person, optionally until a date; members can request more; read-only share links for people outside your team. Readers can watch a blueprint and get an email when it changes.
 - **An audit trail and sensible security.** Two-factor sign-in, active sessions, rate limits, a small audit log of the changes that matter and structured logs for everything else.
 
 ## Tour
@@ -37,11 +37,11 @@ Upload a spec, preview it, review what changed, publish. Readers get a clean, se
 <table>
 <tr>
 <td width="50%"><img src="docs/screenshots/home.png" alt="The list of blueprints"></td>
-<td width="50%"><img src="docs/screenshots/changelog.png" alt="A changelog listing what changed in each revision"></td>
+<td width="50%"><img src="docs/screenshots/changelog.png" alt="A changelog listing what changed in each revision, with breaking changes called out"></td>
 </tr>
 <tr>
 <td><sub><b>Your blueprints</b>, filtered to what you are allowed to read. Download the original file or a Postman collection from the viewer.</sub></td>
-<td><sub><b>What changed.</b> Every revision lists the endpoints added, changed, removed and newly deprecated, so integrators do not have to diff a spec.</sub></td>
+<td><sub><b>What changed.</b> Every revision lists the endpoints added, changed, removed and newly deprecated, and calls out the <b>breaking changes</b>, so integrators do not have to diff a spec. Readers can <b>Watch</b> a blueprint to be emailed when it changes.</sub></td>
 </tr>
 </table>
 
@@ -60,6 +60,17 @@ Upload a spec, preview it, review what changed, publish. Readers get a clean, se
 
 <p align="center"><img src="docs/screenshots/publish-review.png" alt="Step 3: review the changes against the current revision" width="80%"><br>
 <sub><b>3. Review changes</b> against the current revision, add a note, publish. If someone saved a newer revision while you were editing, your save is refused and your text is kept.</sub></p>
+
+<table>
+<tr>
+<td width="50%"><img src="docs/screenshots/compare.png" alt="Comparing two revisions: breaking changes listed first"></td>
+<td width="50%"><img src="docs/screenshots/api-tokens.png" alt="Publish API tokens and a curl example"></td>
+</tr>
+<tr>
+<td><sub><b>Compare any two revisions.</b> Breaking changes first: a parameter that became required, a field that disappeared, a response that changed type. Admins can also open any old revision as documentation.</sub></td>
+<td><sub><b>Publish from CI.</b> A token that can publish one blueprint and nothing else. A broken spec fails the pipeline instead of reaching readers.</sub></td>
+</tr>
+</table>
 
 ### Control access
 
@@ -86,7 +97,7 @@ Upload a spec, preview it, review what changed, publish. Readers get a clean, se
 
 ## Quick start
 
-Needs Node 20+ and a PostgreSQL server (default `postgres:postgres@localhost:5432`).
+Needs Node 22+ (24 LTS recommended, see `.nvmrc`) and a PostgreSQL server (default `postgres:postgres@localhost:5432`).
 
 ```sh
 npm install
@@ -120,7 +131,26 @@ Locked out? Use *Forgot password* (needs SMTP; in development the link is printe
 - **Request:** a member clicks *Request access* on a blueprint → admins are emailed → approve or reject in Manage → Access requests → the member is emailed.
 - **Assign:** Manage → Blueprints → Access (who can read this blueprint) or Manage → Users → Access (what this person can read). Both un-assign in bulk.
 - **Share link:** for someone without an account: read-only access to that one blueprint (no search, no other pages), 1 to 90 days, revocable, never indexed. Only a hash of the link is stored, and opening one writes nothing to the database.
-- **Sign-in:** optional two-factor sign-in (authenticator app plus single-use recovery codes), a page of active sessions, and the last active admin can never be demoted, disabled or deleted.
+- **Single sign-on:** optional OpenID Connect (Google, Microsoft Entra, Okta, Keycloak, Auth0, …). A *Sign in with …* button appears next to the password form. Authorization code flow with PKCE, state and nonce; the ID token's signature, issuer, audience, expiry and nonce are all checked; and only an email the provider has **verified** is accepted. Accounts are matched by email, and with `OIDC_ALLOWED_DOMAINS` only those domains can sign in this way. `OIDC_AUTO_CREATE=true` creates a **guest** on first sign-in (who sees nothing until an admin assigns blueprints). The provider is trusted to apply its own second factor, so the local authenticator step is skipped for SSO sign-ins.
+- **Time-limited access:** when assigning, pick an end date: the person can read until the end of that day (UTC), then it stops everywhere and they can request it again.
+- **Watch:** readers click *Watch* on a blueprint to be emailed when it is published, with what was added, changed, removed and what is breaking. Access is re-checked at send time.
+- **Sign-in:** optional two-factor sign-in (authenticator app plus single-use recovery codes), a page of active sessions, idle sessions end after 24 hours, and the last active admin can never be demoted, disabled or deleted.
+
+## Publish from CI
+
+Manage → Blueprints → *Publish API* creates a token that can publish **one blueprint** and nothing else (it cannot read documents or reach any other blueprint). It is shown once, can expire, can be revoked, and only its hash is stored.
+
+```sh
+curl --fail-with-body -X PUT "https://docs.example.com/api/v1/blueprints/12" \
+  -H "Authorization: Bearer $SPECLY_TOKEN" \
+  -H "Content-Type: application/yaml" \
+  -H "X-Change-Note: Release $GITHUB_SHA" \
+  --data-binary @openapi.yaml
+```
+
+The answer is JSON: `unchanged`, the new `revision`, counts of `added` / `changed` / `removed` / `deprecated` endpoints, and a `breaking` list. An invalid document is refused with 400 and the line of the error, so a broken spec fails the pipeline instead of reaching readers. Limits: 5 MB per document, 60 publishes a minute per token, 10 active tokens per blueprint.
+
+**Breaking changes** are worked out field by field (OpenAPI 3.x and Swagger 2.0, local `$ref`s resolved): a parameter that became required or changed type, a request field that became required, a success response or response field that disappeared or changed type, a removed endpoint. They are shown before you publish, in the changelog, in watcher emails and in the API answer. Admins can open any old revision as documentation and compare any two (Manage → Blueprints → History).
 
 ## Configuration
 
@@ -133,15 +163,22 @@ Everything is read from `.env` in one place, `src/config.js` (copy `.env.example
 | `DATABASE_URL` | `postgresql://postgres:postgres@localhost:5432/specly` | PostgreSQL connection (required in production) |
 | `ADMIN_EMAIL`, `ADMIN_PASSWORD` | `admin@specly.local`, generated | The first admin, used by `npm run seed` and the first start |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM` | – | Email. Without `SMTP_HOST`, emails are printed to the console (development only) |
-| `NOTIFY_EMAILS` | `true` | Emails about access requests and assignments (invitations and resets always send) |
+| `NOTIFY_EMAILS` | `true` | Emails about access requests, assignments and watched blueprints (invitations and resets always send) |
+| `APP_SECRET` | – | 32+ characters; encrypts two-factor secrets in the database. **Required in production**: `openssl rand -base64 32` |
 | `TRUST_PROXY` | `false` | Set to `true` behind a reverse proxy |
+| `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` | – | Turn on single sign-on (all three). Register `<BASE_URL>/auth/oidc/callback` as the redirect URI. The issuer must be `https://` |
+| `OIDC_NAME`, `OIDC_SCOPE` | `single sign-on`, `openid email profile` | Button label and requested scopes |
+| `OIDC_ALLOWED_DOMAINS`, `OIDC_AUTO_CREATE` | – , `false` | Which email domains may sign in with SSO (comma-separated), and whether to create a guest account on first sign-in (needs the list) |
 | `AUTO_MIGRATE`, `AUTO_SEED` | `true` | Apply migrations on start; create the admin and a sample on a first start |
 | `DB_POOL_MAX`, `DB_STATEMENT_TIMEOUT_MS`, `DB_CONNECT_TIMEOUT_MS`, `DATABASE_SSL` | `10`, `15000`, `5000`, `false` | Database tuning |
 | `LOGIN_RATE_MAX` | `30` | Sign-in attempts per IP per 15 minutes |
+| `SESSION_IDLE_HOURS` | `24` | Sessions end after this long without activity (`0` = never); the hard limit is 7 days |
+| `TRASH_RETENTION_DAYS` | `30` | Deleted blueprints and users are removed for good after this many days (`0` = never); each removal is audited |
+| `BCRYPT_COST` | `12` | Password hashing cost (4 to 15); hashes are upgraded at sign-in when you raise it |
 | `LOG_LEVEL`, `LOG_FORMAT`, `SLOW_REQUEST_MS`, `SLOW_QUERY_MS` | `info`, `json`/`pretty`, `1000`, `500` | Logging, see below |
 | `AUDIT_STORE`, `AUDIT_RETENTION_DAYS` | `important`, `0` (forever) | What the audit table keeps, and for how long |
 
-With `NODE_ENV=production` the app refuses to start without `BASE_URL`, `DATABASE_URL` and `SMTP_HOST` (`ALLOW_CONSOLE_MAIL=true` overrides the last one, for demos only). Serve it over HTTPS: sessions are `httpOnly`, `SameSite=Lax`, and `Secure` on https.
+With `NODE_ENV=production` the app refuses to start without `BASE_URL`, `DATABASE_URL`, `SMTP_HOST` (`ALLOW_CONSOLE_MAIL=true` overrides this one, for demos only) and `APP_SECRET`, and refuses an `ADMIN_PASSWORD` shorter than 12 characters or a well-known example. Serve it over HTTPS: sessions are `httpOnly`, `SameSite=Lax`, and `Secure` on https.
 
 ## Database migrations and seed data
 
@@ -165,7 +202,7 @@ and, with `--demo`, `demo.member@specly.local` and `demo.guest@specly.local` wit
 ## Operations
 
 - **Health:** `GET /healthz` returns 200 `{"status":"ok"}` when the database answers and 503 otherwise, with no login needed.
-- **Backups:** `npm run backup` writes `backups/specly-<timestamp>.dump` and keeps the newest `BACKUP_KEEP` (default 14; `BACKUP_DIR` changes the folder). Restore with `pg_restore --clean --if-exists --no-owner -d "$DATABASE_URL" <file>`. Schedule it and copy the files off the machine.
+- **Backups:** `npm run backup` writes `backups/specly-<timestamp>.dump` and keeps the newest `BACKUP_KEEP` (default 14; `BACKUP_DIR` changes the folder). Restore with `pg_restore --clean --if-exists --no-owner -d "$DATABASE_URL" <file>`. Schedule it and copy the files off the machine, and encrypt them: a dump holds personal data. In the Docker image (which has no npm) run `node scripts/backup.js` instead.
 - **CI:** `.github/workflows/ci.yml` runs lint, the onboarding path (migrate and seed on a fresh database), the tests and a Docker build on every push and pull request.
 - **Logs and the audit log:** see below.
 
@@ -201,8 +238,11 @@ High-volume or low-value events are **only logged**: other users' sign-ins, acce
 
 ## Security notes
 
-CSRF tokens on every form, a strict Content-Security-Policy (no inline scripts), hashed sessions and one-time tokens, single-use reset and invite links,
-rate limits on sign-in and password reset, failed sign-ins logged but never stored, and password reset that answers at the same speed whether or not the account exists.
+- **Requests:** CSRF tokens on every form, a strict Content-Security-Policy (no inline scripts, no framing by other sites), `Permissions-Policy`, `nosniff`, and `Cache-Control: no-store` on every dynamic page. The machine API has no cookies and no sessions, only bearer tokens.
+- **Accounts:** passwords hashed with bcrypt (cost 12, upgraded at sign-in), trivial passwords refused, rate limits on sign-in, password reset, two-factor codes and search, failed sign-ins logged but never stored, and a password reset that answers at the same speed whether or not the account exists. Two-factor secrets are encrypted at rest; recovery codes, sessions, one-time links, share links and API tokens are stored as hashes only.
+- **Documents:** specs are parsed as plain data (no YAML types, so no code execution), and a document that expands enormously through YAML aliases ("billion laughs"), nests too deeply or loops is rejected before anything walks it. Everything a spec contains is escaped when shown, and descriptions are sanitised markdown.
+- **Supply chain:** `npm audit` runs in CI (any known vulnerability, production or development, fails the build), Dependabot opens weekly updates, and the image runs on the current Node LTS as a non-root user. Node 20 reached end of life in March 2026 and is not supported.
+- **Your part:** serve it over HTTPS, set `TRUST_PROXY=true` behind a proxy so rate limits see real addresses, keep `APP_SECRET` out of the repository, and encrypt backups: a database dump contains personal data.
 
 ## Development
 
