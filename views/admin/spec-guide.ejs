@@ -1,0 +1,89 @@
+<%
+  // Every spec feature the viewer understands, each with a snippet to copy and a mock of what readers see.
+  var pill = function (t, cls) { return '<span class="flag ml-1 ' + cls + '">' + t + '</span>'; };
+  var grey = 'flag-neutral';
+  var amber = 'flag-dep';
+  var chip = function (t) { return '<code class="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs dark:bg-slate-800">' + t + '</code>'; };
+  var row = function (cells) { return '<tr class="border-b border-slate-100 last:border-0 dark:border-slate-800">' + cells.map(function (c) { return '<td class="px-2 py-1.5 align-top">' + c + '</td>'; }).join('') + '</tr>'; };
+  var tbl = function (heads, rows) { return '<div class="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800"><table class="w-full text-xs"><thead class="border-b border-slate-200 text-left uppercase text-slate-600 dark:border-slate-800 dark:text-slate-400"><tr>' + heads.map(function (h) { return '<th class="px-2 py-1.5 font-semibold">' + h + '</th>'; }).join('') + '</tr></thead><tbody>' + rows.join('') + '</tbody></table></div>'; };
+  var key = function (n, extra) { return '<span class="font-mono text-[13px] font-semibold">' + n + '</span>' + (extra || ''); };
+  var sections = [
+    { title: 'Mark an endpoint as WIP / under development', tag: 'x-status',
+      intro: 'Sharing the contract before the endpoint is built? Add these two optional lines under the method (get, post, …). Readers see a purple badge in the sidebar and on the endpoint, with your note.',
+      code: 'paths:\n  /refunds:\n    post:\n      summary: Refund a charge\n      x-status: wip\n      x-status-description: Request body may still change.\n      responses: ...',
+      json: '"/refunds": {\n  "post": {\n    "summary": "Refund a charge",\n    "x-status": "wip",\n    "x-status-description": "Request body may still change.",\n    "responses": { ... }\n  }\n}',
+      notes: ['<code>x-status</code>: the badge text, up to 30 characters (<code>wip</code>, <code>on progress</code>, <code>beta</code>, <code>planned</code>…).', '<code>x-status-description</code> (optional): the note shown on the endpoint page. It has no effect without <code>x-status</code>.', 'It goes on each endpoint, not on a path or folder. To mark one ready, delete both lines and save.', 'Shown in the Collection view (default); the classic Swagger UI view ignores it.'],
+      result: '<div class="text-sm font-semibold">Refund a charge ' + pill('wip', 'flag-wip') + '</div><div class="mt-2 rounded-lg border border-violet-300 bg-violet-50 px-3 py-2 text-xs text-violet-900 dark:border-violet-800 dark:bg-violet-950 dark:text-violet-200"><div class="font-semibold">Status: wip</div>Request body may still change.</div>' },
+    { title: 'Deprecate an endpoint, parameter or field', tag: 'deprecated',
+      intro: 'The standard OpenAPI flag for "stop using this". It is separate from x-status. The name is struck through and a badge shows in the sidebar, the request list and search. The Changes step lists newly deprecated endpoints.',
+      code: 'paths:\n  /pets/search:\n    get:\n      summary: Search pets\n      deprecated: true\n      parameters:\n        - name: q\n          in: query\n          deprecated: true\n          schema: { type: string }',
+      notes: ['Works on an operation, a parameter and a schema property.'],
+      result: '<div class="text-sm font-semibold"><s>Search pets</s> ' + pill('deprecated', amber) + '</div><div class="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200"><div class="font-semibold">Deprecated</div>This endpoint is deprecated and may be removed. Avoid using it in new code.</div><div class="mt-2">' + key('<s>q</s>', pill('deprecated', amber)) + '</div>' },
+    { title: 'Field flags: nullable, read-only, write-only', tag: 'nullable · readOnly · writeOnly',
+      intro: 'Tell readers which fields may be null, which only come back from the API and which are only sent. Examples follow the flags: read-only fields are left out of request examples and write-only fields out of response examples.',
+      code: 'components:\n  schemas:\n    User:\n      type: object\n      properties:\n        id:       { type: integer, readOnly: true }\n        password: { type: string,  writeOnly: true }\n        nickname: { type: string,  nullable: true }',
+      notes: ['OpenAPI 3.1 <code>type: [string, "null"]</code> and Swagger 2 <code>x-nullable: true</code> also work.'],
+      result: tbl(['Field', 'Type'], [row([key('id', pill('read-only', grey)), 'integer']), row([key('password', pill('write-only', grey)), 'string']), row([key('nickname', pill('nullable', grey)), 'string'])]) },
+    { title: 'Validation rules', tag: 'minLength · maximum · pattern …',
+      intro: 'Limits you define on a schema show as small chips beside the field or parameter.',
+      code: 'properties:\n  name:  { type: string,  minLength: 3, maxLength: 50 }\n  code:  { type: string,  pattern: "^[A-Z]{3}$" }\n  age:   { type: integer, minimum: 0, maximum: 120 }\n  tags:  { type: array,   minItems: 1, maxItems: 10, uniqueItems: true, items: { type: string } }',
+      notes: ['Supported: minLength, maxLength, pattern, minimum, maximum (and exclusive), multipleOf, minItems, maxItems, uniqueItems, minProperties, maxProperties. Also <code>enum</code> and <code>default</code>.'],
+      result: tbl(['Field', 'Rules'], [row([key('name'), chip('min length 3') + ' ' + chip('max length 50')]), row([key('code'), chip('pattern ^[A-Z]{3}$')]), row([key('age'), chip('≥ 0') + ' ' + chip('≤ 120')]), row([key('tags'), chip('min items 1') + ' ' + chip('max items 10') + ' ' + chip('unique items')])]) },
+    { title: 'Response headers', tag: 'headers',
+      intro: 'Document headers the API returns (pagination, rate limits, Location). They get their own table under the response.',
+      code: 'responses:\n  "200":\n    description: OK\n    headers:\n      X-Rate-Limit:\n        description: Calls left this minute\n        schema: { type: integer }',
+      result: '<div class="mb-1 text-xs font-medium">Response headers</div>' + tbl(['Header', 'Type', 'Description'], [row([key('X-Rate-Limit'), 'integer', 'Calls left this minute'])]) },
+    { title: 'Several shapes (oneOf / anyOf) and several examples', tag: 'oneOf · discriminator · examples',
+      intro: 'A body or response that can take different shapes lists every option with its own example and fields. Named examples appear under "All examples".',
+      code: 'content:\n  application/json:\n    schema:\n      oneOf:\n        - $ref: "#/components/schemas/Cat"\n        - $ref: "#/components/schemas/Dog"\n      discriminator:\n        propertyName: kind\n    examples:\n      cat: { summary: A cat, value: { kind: cat } }\n      dog: { summary: A dog, value: { kind: dog } }',
+      notes: ['Give schemas a name (<code>$ref</code>) or a <code>title</code> so the options are labelled. A discriminator <code>mapping</code> names them by its keys.'],
+      result: '<div class="text-sm font-medium">One of 2 shapes <span class="text-xs font-normal text-slate-600 dark:text-slate-400">(chosen by “kind”)</span></div><div class="mt-1 space-y-1"><div class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold dark:border-slate-700">▸ Cat</div><div class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold dark:border-slate-700">▸ Dog</div></div><div class="mt-2 text-xs font-medium text-brand-600 dark:text-brand-400">▸ All examples (2)</div>' },
+    { title: 'Form bodies and file uploads', tag: 'multipart/form-data',
+      intro: 'multipart and URL-encoded bodies are shown as a field table, and the code samples use the right form of each language (curl --form, FormData, files=).',
+      code: 'requestBody:\n  content:\n    multipart/form-data:\n      schema:\n        type: object\n        required: [file]\n        properties:\n          file:  { type: string, format: binary }\n          label: { type: string, example: cover }',
+      notes: ['<code>format: binary</code> marks a file. For Swagger 2 use <code>in: formData</code> parameters, with <code>type: file</code> for files.'],
+      result: tbl(['Field', 'Type', 'Value'], [row([key('file', ' <span class="text-xs text-red-700 dark:text-red-400">required</span>'), 'string (binary)', '<i>file upload</i>']), row([key('label'), 'string', chip('cover')])]) + '<pre class="mt-2 overflow-x-auto rounded-lg bg-slate-900 p-2 font-mono text-[11px] leading-5 text-slate-100">curl --request POST \\\n  --url \'{{baseUrl}}/upload\' \\\n  --form \'file=@/path/to/file\' \\\n  --form \'label=cover\'</pre>' },
+    { title: 'Cookie parameters and authorization', tag: 'in: cookie · security',
+      intro: 'Cookie parameters get their own table and a Cookie header in the example. Bearer, Basic, API key and OAuth schemes show as an Authorization section.',
+      code: 'components:\n  securitySchemes:\n    bearerAuth: { type: http, scheme: bearer }\nsecurity:\n  - bearerAuth: []\npaths:\n  /me:\n    get:\n      parameters:\n        - { name: sid, in: cookie, required: true, schema: { type: string } }',
+      result: '<div class="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-400">Authorization</div><p class="text-xs">Bearer Token <span class="text-slate-600 dark:text-slate-400">— sent in the Authorization header</span></p><div class="mt-2 text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-400">Cookie params</div>' + tbl(['Key', 'Example value'], [row([key('sid', ' <span class="text-xs text-red-700 dark:text-red-400">required</span>'), chip('string')])]) },
+    { title: 'About, contact, license and links', tag: 'info · externalDocs · tags',
+      intro: 'Shown on the overview page. Folders come from tags, in the order you list them, with their descriptions. Only http(s) links are shown.',
+      code: 'info:\n  title: Pet Store\n  version: 1.2.0\n  description: Markdown **works** here.\n  contact: { name: API Team, email: api@example.com }\n  license: { name: MIT, url: "https://example.com/mit" }\n  termsOfService: https://example.com/terms\nexternalDocs: { url: "https://example.com/docs", description: Handbook }\ntags:\n  - name: Pets\n    description: Everything about pets\n    externalDocs: { url: "https://example.com/pets" }',
+      notes: ['<code>externalDocs</code> can also sit on an endpoint. It then shows as a "More documentation" link on that page.'],
+      result: '<dl class="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-1 text-xs"><dt class="text-slate-600 dark:text-slate-400">Contact</dt><dd>API Team · <span class="text-brand-600 dark:text-brand-400">api@example.com ↗</span></dd><dt class="text-slate-600 dark:text-slate-400">License</dt><dd class="text-brand-600 dark:text-brand-400">MIT ↗</dd><dt class="text-slate-600 dark:text-slate-400">Terms of service</dt><dd class="text-brand-600 dark:text-brand-400">https://example.com/terms ↗</dd><dt class="text-slate-600 dark:text-slate-400">More docs</dt><dd class="text-brand-600 dark:text-brand-400">Handbook ↗</dd></dl>' },
+    { title: 'Servers and base URL', tag: 'servers',
+      intro: 'Each server becomes an option in the URL bar and the code samples. Variables use their default. Swagger 2 builds the URL from schemes, host and basePath.',
+      code: 'servers:\n  - url: https://api.example.com/v1\n    description: Production\n  - url: https://staging.example.com/v1\n    description: Staging',
+      result: tbl(['URL', 'Description'], [row([chip('https://api.example.com/v1'), 'Production']), row([chip('https://staging.example.com/v1'), 'Staging'])]) }
+  ];
+%>
+<details class="mt-4 rounded-lg border border-slate-200 bg-slate-50 text-sm dark:border-slate-700 dark:bg-slate-900" data-guide>
+  <summary class="cursor-pointer select-none px-4 py-2.5 font-medium">Guideline: what Specly shows from your spec (with examples)</summary>
+  <div class="space-y-2 border-t border-slate-200 p-3 dark:border-slate-700">
+    <p class="px-1 text-slate-600 dark:text-slate-400">Standard OpenAPI keywords are shown automatically. Open a topic to see the snippet to add and what readers will see.</p>
+    <% sections.forEach(function (s, i) { %>
+    <details class="rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-950">
+      <summary class="flex cursor-pointer select-none flex-wrap items-center gap-x-2 px-3 py-2 font-medium"><%= s.title %> <code class="rounded bg-slate-100 px-1.5 py-0.5 text-xs font-normal dark:bg-slate-800"><%= s.tag %></code></summary>
+      <div class="space-y-3 border-t border-slate-200 px-3 py-3 dark:border-slate-700">
+        <p><%= s.intro %></p>
+        <div class="grid gap-3 lg:grid-cols-2">
+          <div class="min-w-0">
+            <div class="mb-1 flex items-center justify-between"><span class="eyebrow">YAML</span><button type="button" class="btn btn-sm btn-ghost" data-copy="<%= s.code %>">Copy</button></div>
+            <pre class="overflow-x-auto rounded-lg bg-slate-900 p-3 font-mono text-xs leading-5 text-slate-100"><%= s.code %></pre>
+            <% if (s.json) { %>
+            <div class="mb-1 mt-3 flex items-center justify-between"><span class="eyebrow">JSON</span><button type="button" class="btn btn-sm btn-ghost" data-copy="<%= s.json %>">Copy</button></div>
+            <pre class="overflow-x-auto rounded-lg bg-slate-900 p-3 font-mono text-xs leading-5 text-slate-100"><%= s.json %></pre>
+            <% } %>
+          </div>
+          <div class="min-w-0">
+            <div class="eyebrow mb-1">Result</div>
+            <div class="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900"><%- s.result %></div>
+          </div>
+        </div>
+        <% if (s.notes) { %><ul class="list-disc space-y-1 pl-5 text-slate-700 dark:text-slate-300"><% s.notes.forEach(function (n) { %><li><%- n %></li><% }) %></ul><% } %>
+      </div>
+    </details>
+    <% }) %>
+  </div>
+</details>

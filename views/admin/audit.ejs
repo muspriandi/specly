@@ -11,9 +11,9 @@
   <select name="limit" aria-label="Events per page" class="field !mt-0 !w-auto">
     <% limits.forEach(function (n) { %><option value="<%= n %>" <%= limit === n ? 'selected' : '' %>><%= n %> / page</option><% }) %>
   </select>
-  <button class="btn">Filter</button>
+  <button class="btn"><%- icon('search') %>Filter</button>
 </form>
-<div class="card overflow-x-auto !p-0">
+<div class="card max-md:overflow-x-auto sticky-head !p-0">
 <% if (!rows.length) { %><p class="p-5 text-sm text-slate-600 dark:text-slate-400">No events.</p><% } else { %>
 <table class="w-full text-sm">
   <% var link = function (key, label) {

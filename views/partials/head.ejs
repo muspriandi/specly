@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="csrf-token" content="<%= typeof csrfToken === 'string' ? csrfToken : '' %>">
 <title><%= title %> · Specly</title>
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
 <script src="/static/theme.js"></script>
@@ -17,13 +18,34 @@
   <div class="mx-auto flex flex-wrap items-center gap-x-2 gap-y-2 px-4 py-2.5 sm:gap-x-4 sm:px-6 max-w-6xl">
     <a href="/" class="text-xl font-extrabold tracking-tight">Spec<span class="text-brand-600 dark:text-brand-400">ly</span></a>
     <% var scoped = typeof scope !== 'undefined' && scope; %>
-    <form action="/search" method="get" role="search" class="relative order-3 w-full sm:order-none sm:w-auto sm:flex-1">
+    <form action="/search" method="get" role="search" aria-label="Site search" class="relative order-3 w-full sm:order-none sm:w-auto sm:flex-1">
       <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><%- icon('search') %></span>
       <% if (scoped) { %><input type="hidden" name="bp" value="<%= scope.id %>"><% } %>
       <input type="search" name="q" value="<%= q %>" placeholder="<%= scoped ? 'Search in ' + scope.title + '…  ( / )' : 'Search blueprints, endpoints, methods…  ( / )' %>" aria-label="<%= scoped ? 'Search in ' + scope.title : 'Search' %>" <%- scoped ? 'data-scope="' + scope.id + '"' : '' %> data-global-search role="combobox" aria-expanded="false" aria-controls="search-suggest" aria-autocomplete="list" autocomplete="off" class="field !mt-0 !pl-9 sm:max-w-md">
       <div id="search-suggest" role="listbox" aria-label="Search suggestions" hidden class="absolute left-0 top-full z-30 mt-1 w-full overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg sm:max-w-md dark:border-slate-700 dark:bg-slate-900"></div>
     </form>
-    <nav aria-label="Main" class="order-2 ml-auto flex items-center gap-1 sm:order-none">
+    <%# Phones: everything folds into one menu so the first row stays uncluttered; search keeps its own row. %>
+    <nav aria-label="Mobile" class="order-2 ml-auto sm:hidden">
+      <details class="relative" data-menu>
+        <summary class="nav-link flex cursor-pointer list-none items-center gap-2 [&::-webkit-details-marker]:hidden"><%- icon('menu', 'size-5') %><span class="sr-only">Menu</span><% if (pendingCount) { %><span class="badge badge-warn !px-1.5 !py-0"><%= pendingCount %></span><% } %></summary>
+        <div class="menu !w-64">
+          <div class="px-3 py-2"><div class="truncate text-sm font-semibold"><%= user.name %></div><div class="truncate text-xs text-slate-600 dark:text-slate-400"><%= user.email %></div></div>
+          <hr class="menu-sep">
+          <a href="/" <%- cur === '/' || cur.indexOf('/blueprints') === 0 || cur === '/search' ? 'aria-current="page"' : '' %>><%- icon('file') %>Documentation</a>
+          <% if (user.role === 'admin') { %>
+            <div class="menu-label">Manage</div>
+            <% [['/manage/blueprints','Blueprints','book'],['/manage/requests','Access requests','key'],['/manage/users','Users','users'],['/manage/invites','Invitations','mail'],['/manage/audit','Audit log','list'],['/manage/trash','Trash','trash']].forEach(function (l) { %><a href="<%= l[0] %>" <%- cur.indexOf(l[0]) === 0 ? 'aria-current="page"' : '' %>><%- icon(l[2]) %><span class="flex-1"><%= l[1] %></span><% if (l[0] === '/manage/requests' && pendingCount) { %><span class="badge badge-warn !px-1.5 !py-0"><%= pendingCount %></span><% } %></a><% }) %>
+          <% } %>
+          <hr class="menu-sep">
+          <button type="button" data-theme-toggle><%- icon('moon', 'size-4 dark:hidden') %><%- icon('sun', 'hidden size-4 dark:block') %>Switch theme</button>
+          <a href="/account/password"><%- icon('lock') %>Change password</a>
+          <a href="/account/2fa"><%- icon('lock') %>Two-factor sign-in</a>
+          <a href="/account/sessions"><%- icon('lock') %>Active sessions</a>
+          <form action="/logout" method="post"><%- include('csrf') %><button><%- icon('logout') %>Sign out</button></form>
+        </div>
+      </details>
+    </nav>
+    <nav aria-label="Main" class="order-2 ml-auto hidden items-center gap-1 sm:order-none sm:flex">
       <a href="/" class="nav-link" <%- cur === '/' || cur.indexOf('/blueprints') === 0 || cur === '/search' ? 'aria-current="page"' : '' %>><span class="sm:hidden" aria-hidden="true">Docs</span><span class="sr-only sm:not-sr-only">Documentation</span></a>
       <% if (user.role === 'admin') { %>
       <details class="relative" data-menu>
@@ -31,8 +53,10 @@
           Manage <% if (pendingCount) { %><span class="badge badge-warn !px-1.5 !py-0" title="<%= pendingCount %> pending access request(s)"><%= pendingCount %></span><% } %><%- icon('chevron', 'size-3.5') %>
         </summary>
         <div class="menu">
-          <% [['/manage/blueprints','Blueprints'],['/manage/users','Users'],['/manage/invites','Invitations'],['/manage/requests','Access requests'],['/manage/audit','Audit log'],['/manage/trash','Trash']].forEach(function (l) { %>
-            <a href="<%= l[0] %>" <%- cur.indexOf(l[0]) === 0 ? 'aria-current="page"' : '' %> class="flex items-center justify-between"><%= l[1] %><% if (l[0] === '/manage/requests' && pendingCount) { %><span class="badge badge-warn !px-1.5 !py-0"><%= pendingCount %></span><% } %></a>
+          <% [['Content', [['/manage/blueprints','Blueprints','book'],['/manage/requests','Access requests','key']]], ['People', [['/manage/users','Users','users'],['/manage/invites','Invitations','mail']]], ['System', [['/manage/audit','Audit log','list'],['/manage/trash','Trash','trash']]]].forEach(function (g, gi) { %>
+            <% if (gi) { %><hr class="menu-sep"><% } %>
+            <div class="menu-label"><%= g[0] %></div>
+            <% g[1].forEach(function (l) { %><a href="<%= l[0] %>" <%- cur.indexOf(l[0]) === 0 ? 'aria-current="page"' : '' %>><%- icon(l[2], 'size-4') %><span class="flex-1"><%= l[1] %></span><% if (l[0] === '/manage/requests' && pendingCount) { %><span class="badge badge-warn !px-1.5 !py-0"><%= pendingCount %></span><% } %></a><% }) %>
           <% }) %>
         </div>
       </details>
@@ -41,20 +65,31 @@
         <%- icon('moon', 'size-5 dark:hidden') %><%- icon('sun', 'hidden size-5 dark:block') %>
       </button>
       <details class="relative" data-menu>
-        <summary class="nav-link flex cursor-pointer list-none items-center gap-2 [&::-webkit-details-marker]:hidden" aria-label="Account menu">
+        <summary class="nav-link flex cursor-pointer list-none items-center gap-2 [&::-webkit-details-marker]:hidden">
           <span class="grid size-7 place-items-center rounded-full bg-brand-600 text-xs font-bold text-white" aria-hidden="true"><%= (user.name || user.email || '?').trim().charAt(0).toUpperCase() %></span>
-          <span class="hidden max-w-32 truncate sm:inline"><%= user.name %></span><%- icon('chevron', 'size-3.5') %>
+          <span class="hidden max-w-32 truncate sm:inline"><%= user.name %></span><span class="sr-only">account menu</span><%- icon('chevron', 'size-3.5') %>
         </summary>
         <div class="menu">
           <div class="px-3 py-2"><div class="truncate text-sm font-semibold"><%= user.name %></div><div class="truncate text-xs text-slate-600 dark:text-slate-400"><%= user.email %></div><span class="badge badge-neutral mt-1"><%= user.role %></span></div>
           <hr class="my-1 border-slate-200 dark:border-slate-700">
-          <a href="/account/password" <%- cur === '/account/password' ? 'aria-current="page"' : '' %>>Change password</a>
-          <form action="/logout" method="post"><%- include('csrf') %><button>Sign out</button></form>
+          <a href="/account/password" <%- cur === '/account/password' ? 'aria-current="page"' : '' %>><%- icon('lock', 'size-4') %>Change password</a>
+          <a href="/account/2fa" <%- cur === '/account/2fa' ? 'aria-current="page"' : '' %>><%- icon('lock', 'size-4') %>Two-factor sign-in</a>
+          <a href="/account/sessions" <%- cur === '/account/sessions' ? 'aria-current="page"' : '' %>><%- icon('lock', 'size-4') %>Active sessions</a>
+          <form action="/logout" method="post"><%- include('csrf') %><button><%- icon('logout', 'size-4') %>Sign out</button></form>
         </div>
       </details>
     </nav>
   </div>
 </header>
+<% if (user.role === 'admin' && onAdmin && !/\/(new|edit)$/.test(cur)) { %><%- include('admin-nav', { cur: cur }) %><% } %>
+<% } %>
+<% if (user) {
+  var cmds = [{ t: 'Documentation', h: '/', g: 'Go to' }, { t: 'Change password', h: '/account/password', g: 'Go to' }, { t: 'Two-factor sign-in', h: '/account/2fa', g: 'Go to' }, { t: 'Active sessions', h: '/account/sessions', g: 'Go to' }];
+  if (user.role === 'admin') cmds = cmds.concat([['Blueprints', '/manage/blueprints'], ['Access requests', '/manage/requests'], ['Users', '/manage/users'], ['Invitations', '/manage/invites'], ['Audit log', '/manage/audit'], ['Trash', '/manage/trash']].map(function (c) { return { t: c[0], h: c[1], g: 'Manage' }; }),
+    [{ t: 'Add blueprint', h: '/manage/blueprints/new', g: 'Create' }, { t: 'New user', h: '/manage/users/new', g: 'Create' }]);
+  cmds.push({ t: 'Switch theme (light / dark)', a: 'theme', g: 'Action' });
+%>
+<div hidden id="cmd-data" data-cmds="<%= JSON.stringify(cmds) %>"></div>
 <% } %>
 <main id="main" class="mx-auto px-4 pb-16 pt-6 sm:px-6 <%= typeof wide !== 'undefined' && wide ? 'max-w-7xl' : 'max-w-6xl' %>">
-<% if (flash) { %><div class="alert-<%= flash.type === 'error' ? 'error' : 'info' %>" role="status" data-flash data-flash-type="<%= flash.type %>"><%= flash.message %></div><% } %>
+<% if (flash) { %><div class="alert-<%= flash.type === 'error' ? 'error' : 'info' %>" role="status" data-flash data-flash-type="<%= flash.type %>"<% if (flash.undo) { %> data-undo-url="<%= flash.undo.url %>" data-undo-body="<%= flash.undo.body %>"<% } %>><%= flash.message %></div><% } %>

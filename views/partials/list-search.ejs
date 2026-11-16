@@ -1,6 +1,6 @@
 <%# locals: filter, placeholder; optional selects: [{ name, label, value, options: [[value, text], ...] }] (first option = "all") %>
 <% var selects = typeof selects !== 'undefined' ? selects : []; var narrowed = !!filter || selects.some(function (s) { return s.value; }); %>
-<form method="get" role="search" class="mb-3 flex flex-wrap gap-2">
+<form method="get" role="search" aria-label="Filter this list" class="mb-3 flex flex-wrap gap-2">
   <% if (typeof query !== 'undefined' && query.limit) { %><input type="hidden" name="limit" value="<%= query.limit %>"><% } %>
   <input type="search" name="q" value="<%= filter %>" placeholder="<%= placeholder %>" aria-label="<%= placeholder %>" class="field !mt-0 sm:max-w-xs">
   <% selects.forEach(function (s) { %>
@@ -8,6 +8,6 @@
     <% s.options.forEach(function (o) { %><option value="<%= o[0] %>" <%= o[0] === s.value ? 'selected' : '' %>><%= o[1] %></option><% }) %>
   </select>
   <% }) %>
-  <button class="btn btn-ghost">Search</button>
-  <% if (narrowed) { %><a class="btn btn-ghost" href="?<%= typeof query !== 'undefined' && query.limit ? 'limit=' + encodeURIComponent(query.limit) : '' %>">Clear</a><% } %>
+  <button class="btn btn-ghost"><%- icon('search') %>Search</button>
+  <% if (narrowed) { %><a class="btn btn-text" href="?<%= typeof query !== 'undefined' && query.limit ? 'limit=' + encodeURIComponent(query.limit) : '' %>">Clear</a><% } %>
 </form>

@@ -1,0 +1,2 @@
+<%# locals: e ({ deprecated, status }). The same badges the viewer shows, in the same order: deprecated, then status. %>
+<% if (e.deprecated) { %><span class="flag flag-dep" title="Deprecated: avoid using it in new code">deprecated</span><% } %><% if (e.status) { %> <span class="flag flag-wip" title="Not final: this endpoint may still change"><%= e.status %></span><% } %>

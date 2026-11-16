@@ -32,7 +32,7 @@
         <% endpoints.forEach(function (e) { %>
         <tr class="tr">
           <td class="td"><%- include('partials/method', { m: e.method }) %></td>
-          <td class="td whitespace-nowrap"><a class="link font-mono" href="/blueprints/<%= e.blueprint_id %>#/<%= encodeURIComponent(e.tag) %>/<%= encodeURIComponent(e.operation_id || (e.method.toLowerCase() + e.path.replace(/[^\w]/g, '_'))) %>"><%- hl(e.path) %></a></td>
+          <td class="td whitespace-nowrap"><a class="link font-mono<%= e.deprecated ? ' line-through' : '' %>" href="/blueprints/<%= e.blueprint_id %>#/<%= encodeURIComponent(e.tag) %>/<%= encodeURIComponent(e.operation_id || (e.method.toLowerCase() + e.path.replace(/[^\w]/g, '_'))) %>"><%- hl(e.path) %></a><% if (e.deprecated || e.status) { %> <%- include('partials/flags', { e: e }) %><% } %></td>
           <td class="td"><%- hl(e.summary) %></td>
           <td class="td text-xs text-slate-600 dark:text-slate-400"><span class="clip" title="<%= e.blueprint_title %>"><%= e.blueprint_title %></span></td>
         </tr>

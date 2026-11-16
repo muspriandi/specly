@@ -19,4 +19,11 @@ const limitSql = (pg) => `LIMIT ${pg.limit} OFFSET ${pg.offset}`;
 // Escapes % and _ so user text matches literally inside ILIKE.
 const likeOf = (s) => `%${String(s).replace(/[\\%_]/g, '\\$&')}%`;
 
-module.exports = { paginate, limitSql, likeOf, DEFAULT_LIMIT };
+// ?sort=key&dir=asc|desc against a whitelist { key: 'SQL expression' }; returns { key, dir, sql } (sql is from the map, never user input).
+function sortOf(req, map, def, defDir = 'asc') {
+  const key = Object.prototype.hasOwnProperty.call(map, req.query.sort) ? req.query.sort : def;
+  const dir = ['asc', 'desc'].includes(req.query.dir) ? req.query.dir : (key === def ? defDir : 'asc');
+  return { key, dir, sql: `${map[key]} ${dir.toUpperCase()}` };
+}
+
+module.exports = { sortOf, paginate, limitSql, likeOf, DEFAULT_LIMIT };

@@ -53,6 +53,6 @@ async function grant(userIds, blueprintIds, adminId) {
 const revoke = (userIds, blueprintIds, adminId) => db.query(`
   UPDATE access_requests r SET status='rejected', decided_by=$3, decided_at=now() FROM users u, blueprints b
   WHERE r.user_id = ANY($1) AND r.blueprint_id = ANY($2) AND r.status='approved' AND u.id=r.user_id AND b.id=r.blueprint_id
-  RETURNING u.email, b.title`, [ids(userIds), ids(blueprintIds), adminId]);
+  RETURNING u.email, b.title, r.user_id, r.blueprint_id`, [ids(userIds), ids(blueprintIds), adminId]);
 
 module.exports = { canView, blueprintsFor, grant, revoke };

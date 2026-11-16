@@ -1,14 +1,14 @@
 <%- include('../partials/head') %>
 <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
   <div>
-    <a class="link" href="/manage/blueprints">← Blueprints</a>
-    <h1 class="mt-1 text-2xl font-bold">History: <%= bp.title %></h1>
+    <%- include('../partials/crumbs', { items: [['Blueprints', '/manage/blueprints'], [bp.title, null], ['History', null]] }) %>
+    <h1 class="text-2xl font-bold">History: <%= bp.title %></h1>
   </div>
-  <a class="btn btn-ghost" href="/manage/blueprints/<%= bp.id %>/edit">Upload a new version</a>
+  <a class="btn btn-ghost" href="/manage/blueprints/<%= bp.id %>/edit"><%- icon('edit') %>Upload a new version</a>
 </div>
-<div class="card overflow-x-auto !p-0">
+<div class="card max-md:overflow-x-auto sticky-head !p-0">
 <table class="w-full text-sm">
-  <thead class="border-b border-slate-200 dark:border-slate-800"><tr><th scope="col" class="th">Revision</th><th scope="col" class="th">Saved</th><th scope="col" class="th">By</th><th scope="col" class="th">Note</th><th scope="col" class="th">Endpoint changes</th><th scope="col" class="th"></th></tr></thead>
+  <thead class="border-b border-slate-200 dark:border-slate-800"><tr><th scope="col" class="th">Revision</th><th scope="col" class="th">Saved</th><th scope="col" class="th">By</th><th scope="col" class="th">Note</th><th scope="col" class="th">Endpoint changes</th><th scope="col" class="th"><span class="sr-only">Actions</span></th></tr></thead>
   <% versions.forEach(function (v, i) { %>
   <tr class="tr align-top">
     <td class="td font-semibold">Rev <%= v.version_no %>
@@ -19,15 +19,27 @@
     <td class="td"><span class="clip" title="<%= (v.author || '—') %>"><%= (v.author || '—') %></span></td>
     <td class="td"><span class="clip !max-w-xs" title="<%= (v.note || '—') %>"><%= (v.note || '—') %></span></td>
     <td class="td text-xs">
-      <% var d = v.diff; if (!d.added.length && !d.removed.length && !d.changed.length) { %><span class="text-slate-600 dark:text-slate-400">No endpoint changes</span><% } %>
-      <% d.added.forEach(function (k) { %><div class="font-mono text-emerald-700 dark:text-emerald-400">+ <%= k %></div><% }) %>
-      <% d.changed.forEach(function (k) { %><div class="font-mono text-amber-700 dark:text-amber-400">~ <%= k %></div><% }) %>
-      <% d.removed.forEach(function (k) { %><div class="font-mono text-red-700 dark:text-red-400">− <%= k %></div><% }) %>
+      <%
+        var d = v.diff, total = d.added.length + d.changed.length + d.removed.length;
+        var rows = [['+', 'text-emerald-700 dark:text-emerald-400', d.added], ['~', 'text-amber-700 dark:text-amber-400', d.changed], ['−', 'text-red-700 dark:text-red-400', d.removed]];
+        var list = function () { rows.forEach(function (r) { r[2].forEach(function (k) { %><div class="max-w-xs truncate font-mono <%= r[1] %>" title="<%= k %>"><%= r[0] %> <%= k %></div><% }) }) };
+      %>
+      <% if (!total) { %><span class="text-slate-600 dark:text-slate-400">No endpoint changes</span>
+      <% } else if (total <= 5) { list(); %>
+      <% } else { %>
+        <div class="flex flex-wrap gap-x-3 font-mono font-semibold">
+          <% rows.forEach(function (r) { if (r[2].length) { %><span class="<%= r[1] %>"><%= r[0] %><%= r[2].length %> <span class="font-sans font-normal"><%= r[0] === '+' ? 'added' : r[0] === '~' ? 'changed' : 'removed' %></span></span><% } }) %>
+        </div>
+        <details class="mt-1">
+          <summary class="link cursor-pointer select-none">Show all <%= total %> endpoints</summary>
+          <div class="mt-1 max-h-64 overflow-y-auto pr-2"><% list(); %></div>
+        </details>
+      <% } %>
     </td>
-    <td class="td"><div class="flex items-center justify-end gap-3 whitespace-nowrap">
-      <a class="link" href="/manage/blueprints/<%= bp.id %>/versions/<%= v.id %>/source">Download</a>
+    <td class="td"><div class="flex items-center justify-end gap-0.5 whitespace-nowrap">
+      <a class="ibtn" href="/manage/blueprints/<%= bp.id %>/versions/<%= v.id %>/source" title="Download this revision" aria-label="Download this revision"><%- icon('download') %></a>
       <% if (i !== 0) { %>
-      <form method="post" action="/manage/blueprints/<%= bp.id %>/versions/<%= v.id %>/restore" data-confirm="Revision <%= v.version_no %> becomes a new current version; nothing is lost." data-confirm-title="Restore revision <%= v.version_no %>?" data-confirm-action="Restore"><%- include('../partials/csrf') %><button class="link">Restore</button></form>
+      <form method="post" action="/manage/blueprints/<%= bp.id %>/versions/<%= v.id %>/restore" data-confirm="Revision <%= v.version_no %> becomes a new current version; nothing is lost." data-confirm-title="Restore revision <%= v.version_no %>?" data-confirm-action="Restore"><%- include('../partials/csrf') %><button class="ibtn" title="Restore this revision" aria-label="Restore this revision"><%- icon('restore') %></button></form>
       <% } %>
     </div></td>
   </tr>

@@ -4,11 +4,12 @@ const db = require('../../db');
 const { audit } = require('../../services/audit');
 const { canonical, saveBlueprint, diffSpecs, getBlueprint, describeSave, ver } = require('../../services/blueprints');
 const { parseSpec, listEndpoints } = require('../../services/spec');
-const { flash, notFound } = require('../../lib/http');
+const { lintSpec } = require('../../services/lint');
+const { flash, notFound, baseUrl, cookieBase } = require('../../lib/http');
 const trash = require('../../services/trash');
 const access = require('../../services/access');
 const { text } = require('../../lib/validate');
-const { paginate, limitSql, likeOf } = require('../../lib/paginate');
+const { paginate, limitSql, likeOf, sortOf } = require('../../lib/paginate');
 
 const MAX_UPLOAD = 5 * 1024 * 1024;
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_UPLOAD, fieldSize: MAX_UPLOAD, files: 1 } });
@@ -16,19 +17,24 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX
 // Uploaded .yaml/.yml/.json file wins over pasted text.
 const sourceFrom = (req) => (req.file ? req.file.buffer.toString('utf8') : String(req.body.content || ''));
 const noteFrom = (req) => text(req.body.note, 200) || null;
-const renderForm = (res, status, bp, content, error) =>
-  res.status(status).render('admin/blueprint-form', { title: bp ? 'Edit blueprint' : 'Add blueprint', bp, content, error });
+const renderForm = (res, status, bp, content, error, conflict = null) =>
+  res.status(status).render('admin/blueprint-form', { title: bp ? 'Edit blueprint' : 'Add blueprint', bp, content, error, conflict });
+
+// Newest saved revision of a blueprint (number, when, by whom): the form remembers the number it was opened at.
+const latestRevision = (id) => db.one(`SELECT v.version_no, v.created_at, u.name AS author FROM blueprint_versions v
+  LEFT JOIN users u ON u.id=v.created_by WHERE v.blueprint_id=$1 ORDER BY v.version_no DESC LIMIT 1`, [id]);
 
 router.get('/', async (req, res) => {
   const filter = text(req.query.q, 100);
   const where = `deleted_at IS NULL${filter ? ' AND title ILIKE $1' : ''}`, params = filter ? [likeOf(filter)] : [];
   const pg = await paginate(req, `SELECT COUNT(*)::int AS n FROM blueprints WHERE ${where}`, params);
+  const sort = sortOf(req, { title: 'lower(b.title)', version: 'b.version', format: 'b.format', endpoints: 'endpoint_count', readers: 'reader_count', updated: 'b.updated_at' }, 'title');
   const blueprints = await db.query(`
     SELECT b.id,b.title,b.version,b.format,b.updated_at,
       (SELECT COUNT(*)::int FROM endpoints e WHERE e.blueprint_id=b.id) AS endpoint_count,
       (SELECT COUNT(*)::int FROM access_requests r JOIN users u ON u.id=r.user_id AND u.deleted_at IS NULL WHERE r.blueprint_id=b.id AND r.status='approved') AS reader_count
-    FROM blueprints b WHERE ${where.replace(/\b(deleted_at|title)\b/g, 'b.$1')} ORDER BY lower(b.title), b.id ${limitSql(pg)}`, params);
-  res.render('admin/blueprints', { title: 'Blueprints', blueprints, pg, filter });
+    FROM blueprints b WHERE ${where.replace(/\b(deleted_at|title)\b/g, 'b.$1')} ORDER BY ${sort.sql}, b.id ${limitSql(pg)}`, params);
+  res.render('admin/blueprints', { title: 'Blueprints', blueprints, pg, filter, sort });
 });
 
 router.get('/new', (req, res) => renderForm(res, 200, null));
@@ -43,7 +49,7 @@ router.post('/preview', upload.single('file'), async (req, res) => {
     const out = {
       ok: true, format, title: spec.info.title.trim(), version: spec.info.version ? String(spec.info.version) : null,
       standard: spec.openapi ? `OpenAPI ${spec.openapi}` : `Swagger ${spec.swagger}`,
-      endpointCount: endpoints.length, folders: new Set(endpoints.map((e) => e.tag)).size,
+      endpointCount: endpoints.length, folders: new Set(endpoints.map((e) => e.tag)).size, ...lintSpec(source, spec),
     };
     const forId = /^\d{1,9}$/.test(String(req.query.for || '')) ? Number(req.query.for) : null;
     if (forId) {
@@ -78,15 +84,42 @@ router.post('/', upload.single('file'), async (req, res) => {
   }
 });
 
+// Several at once (checkboxes on the list). No undo toast for a batch, so the form asks first.
+router.post('/bulk-delete', async (req, res) => {
+  const ids = [...new Set([].concat(req.body.ids || []).map(Number).filter((n) => Number.isInteger(n) && n > 0))].slice(0, 200);
+  let n = 0;
+  for (const id of ids) {
+    const bp = await trash.deleteBlueprint(id, req.user.id);
+    if (!bp) continue;
+    n += 1;
+    await audit(req, 'blueprint.deleted', { type: 'blueprint', id, detail: `Moved "${bp.title}" ${ver(bp.version)} to the trash (bulk)` });
+  }
+  flash(res, n ? `${n} blueprint${n === 1 ? '' : 's'} moved to the trash.` : 'Select at least one blueprint first.', n ? 'success' : 'error');
+  res.redirect('/manage/blueprints');
+});
+
 router.get('/:id/edit', async (req, res) => {
   const bp = await getBlueprint(req.params.id, 'id,title,source');
   if (!bp) return notFound(res, 'Blueprint not found.');
+  bp.revision = ((await latestRevision(bp.id)) || {}).version_no;
   renderForm(res, 200, bp, bp.source);
 });
 
 router.post('/:id', upload.single('file'), async (req, res) => {
   const bp = await getBlueprint(req.params.id, 'id,title,source');
   if (!bp) return notFound(res, 'Blueprint not found.');
+  // Optimistic concurrency: the form carries the revision it was opened at. If someone saved a newer one meanwhile,
+  // refuse (keeping the text the admin typed) unless they tick "overwrite". Saving identical content is never a conflict.
+  const latest = await latestRevision(bp.id);
+  const opened = Number(req.body.base);
+  bp.revision = opened || (latest && latest.version_no);
+  if (latest && opened && opened !== latest.version_no && !req.body.overwrite) {
+    const content = sourceFrom(req);
+    if (String(content).replace(/\r\n?/g, '\n').trimEnd() !== String(bp.source).replace(/\r\n?/g, '\n').trimEnd()) {
+      return renderForm(res, 409, bp, content, 'This blueprint was changed while you were editing it. Your text is kept below; nothing was saved.',
+        { revision: latest.version_no, author: latest.author, at: latest.created_at });
+    }
+  }
   try {
     const saved = await saveBlueprint(bp.id, sourceFrom(req), req.user.id, noteFrom(req));
     if (!saved.unchanged) await audit(req, 'blueprint.updated', { type: 'blueprint', id: bp.id, detail: describeSave(saved) });
@@ -105,7 +138,7 @@ router.post('/:id/delete', async (req, res) => {
     await audit(req, 'blueprint.deleted', { type: 'blueprint', id: req.params.id,
       detail: `Moved "${bp.title}" ${ver(bp.version)} to the trash — hidden from everyone${extra ? `; ${extra}` : ''}` });
   }
-  flash(res, bp ? `“${bp.title}” moved to the trash. You can restore it from Manage → Trash.` : 'Blueprint not found.', bp ? 'success' : 'error');
+  flash(res, bp ? `“${bp.title}” moved to the trash.` : 'Blueprint not found.', bp ? 'success' : 'error', bp ? { url: `/manage/trash/blueprints/${bp.id}/restore` } : null);
   res.redirect('/manage/blueprints');
 });
 
@@ -150,7 +183,8 @@ const revokeUsers = (pick) => async (req, res) => {
   if (!bp) return notFound(res, 'Blueprint not found.');
   const done = await access.revoke(pick(req), [bp.id], req.user.id);
   if (done.length) await audit(req, 'blueprint.access_changed', { type: 'blueprint', id: bp.id, detail: `Removed ${list(done)} from "${bp.title}"` });
-  flash(res, done.length ? `Removed access for ${plural(done.length, 'user')}.` : 'Select at least one user first.', done.length ? 'success' : 'error');
+  flash(res, done.length ? `Removed access for ${plural(done.length, 'user')}.` : 'Select at least one user first.', done.length ? 'success' : 'error',
+    done.length && done.length <= 50 ? { url: `/manage/blueprints/${bp.id}/access`, body: done.map((d) => `users=${d.user_id}`).join('&') } : null);
   res.redirect(back(req));
 };
 router.post('/:id/access/revoke', revokeUsers((req) => [].concat(req.body.users || [])));

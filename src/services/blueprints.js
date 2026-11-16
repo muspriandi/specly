@@ -65,10 +65,14 @@ function diffSpecs(prevText, nextText) {
     return out;
   };
   const a = prevText == null ? new Map() : ops(prevText), b = ops(nextText);
-  const added = [], removed = [], changed = [];
-  for (const [k, v] of b) { if (!a.has(k)) added.push(k); else if (a.get(k) !== v) changed.push(k); }
+  const added = [], removed = [], changed = [], deprecated = [];
+  const flag = (m, k) => { try { return JSON.parse(m.get(k)).deprecated === true; } catch { return false; } };
+  for (const [k, v] of b) {
+    if (!a.has(k)) added.push(k); else if (a.get(k) !== v) changed.push(k);
+    if (flag(b, k) && !(a.has(k) && flag(a, k))) deprecated.push(k); // newly deprecated (or added already deprecated)
+  }
   for (const k of a.keys()) if (!b.has(k)) removed.push(k);
-  return { added, removed, changed };
+  return { added, removed, changed, deprecated };
 }
 
 // The raw text is not a column of blueprints: `source` resolves to the latest revision's text.

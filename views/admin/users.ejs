@@ -1,23 +1,29 @@
 <%- include('../partials/head') %>
-<div class="mb-4 flex items-center justify-between"><h1 class="text-2xl font-bold">Users</h1><a class="btn" href="/manage/users/new">New user</a></div>
+<div class="mb-4 flex items-center justify-between"><h1 class="text-2xl font-bold">Users</h1><a class="btn" href="/manage/users/new"><%- icon('plus') %>New user</a></div>
 <%- include('../partials/list-search', { placeholder: 'Search by name or email', filter: filter, selects: [
   { name: 'role', label: 'Filter by role', value: role, options: [['', 'All roles']].concat(roles.map(function (r) { return [r, r.charAt(0).toUpperCase() + r.slice(1)]; })) },
   { name: 'status', label: 'Filter by status', value: status, options: [['', 'Any status'], ['active', 'Active'], ['disabled', 'Disabled']] } ] }) %>
-<div class="card overflow-x-auto !p-0">
+<form id="bulk" hidden data-bulk-autohide method="post" action="/manage/users/bulk-delete" class="mb-3 flex flex-wrap items-center gap-2" data-confirm="They will lose access and be signed out. You can restore the accounts from the Trash. Your own account is skipped." data-confirm-title="Move the selected users to the trash?" data-confirm-action="Move to trash"><%- include('../partials/csrf') %>
+  <span class="text-sm text-slate-600 dark:text-slate-400" data-bulk-count aria-live="polite">0 selected</span>
+  <button class="btn btn-sm btn-danger" data-bulk-btn disabled><%- icon('trash') %>Move to trash</button>
+</form>
+<div class="card max-md:overflow-x-auto sticky-head !p-0">
 <table id="tbl" class="w-full text-sm">
   <caption class="sr-only">Users</caption>
-  <thead class="border-b border-slate-200 dark:border-slate-800"><tr><th scope="col" class="th">Name</th><th scope="col" class="th">Email</th><th scope="col" class="th">Role</th><th scope="col" class="th">Status</th><th scope="col" class="th">Created</th><th scope="col" class="th"><span class="sr-only">Actions</span></th></tr></thead>
+  <thead><tr><th scope="col" class="th w-10"><input type="checkbox" class="size-4 accent-brand-600" data-bulk-all aria-label="Select all users on this page"></th>
+    <%- include('../partials/sort-th', { key: 'name', label: 'Name', sort: sort, query: query }) %><%- include('../partials/sort-th', { key: 'email', label: 'Email', sort: sort, query: query }) %><%- include('../partials/sort-th', { key: 'role', label: 'Role', sort: sort, query: query }) %><%- include('../partials/sort-th', { key: 'status', label: 'Status', sort: sort, query: query }) %><%- include('../partials/sort-th', { key: 'created', label: 'Created', sort: sort, query: query }) %><th scope="col" class="th"><span class="sr-only">Actions</span></th></tr></thead>
   <% users.forEach(function (u) { %>
   <tr class="tr <%= u.active ? '' : 'opacity-60' %>">
+    <td class="td"><% if (u.id !== user.id) { %><input type="checkbox" class="size-4 accent-brand-600" name="ids" value="<%= u.id %>" form="bulk" data-bulk-row aria-label="Select <%= u.name %>"><% } %></td>
     <td class="td font-medium"><span class="clip" title="<%= u.name %>"><%= u.name %></span></td><td class="td"><span class="clip" title="<%= u.email %>"><%= u.email %></span></td>
     <td class="td"><span class="badge <%= u.role === 'admin' ? 'badge-info' : u.role === 'member' ? 'badge-ok' : 'badge-neutral' %>"><%= u.role %></span></td>
     <td class="td"><span class="badge <%= u.active ? 'badge-ok' : 'badge-bad' %>"><%= u.active ? 'Active' : 'Disabled' %></span></td>
     <td class="td text-xs text-slate-600 dark:text-slate-400"><%= fmt(u.created_at) %></td>
-    <td class="td"><div class="flex items-center justify-end gap-3">
-      <% if (u.role !== 'admin') { %><a class="link" href="/manage/users/<%= u.id %>/access">Access</a><% } %>
-      <a class="link" href="/manage/users/<%= u.id %>/edit">Edit</a>
+    <td class="td"><div class="flex items-center justify-end gap-0.5">
+      <% if (u.role !== 'admin') { %><a class="ibtn" href="/manage/users/<%= u.id %>/access" title="Blueprint access" aria-label="Blueprint access: <%= u.name %>"><%- icon('key') %></a><% } %>
+      <a class="ibtn" href="/manage/users/<%= u.id %>/edit" title="Edit" aria-label="Edit: <%= u.name %>"><%- icon('edit') %></a>
       <% if (u.id !== user.id) { %>
-      <form method="post" action="/manage/users/<%= u.id %>/delete" data-confirm="<%= u.name %> (<%= u.email %>) will lose access and be signed out. You can restore the account from the Trash." data-confirm-title="Move this user to the trash?" data-confirm-action="Move to trash"><%- include('../partials/csrf') %><button class="link-danger">Delete</button></form>
+      <form method="post" action="/manage/users/<%= u.id %>/delete"><%- include('../partials/csrf') %><button class="ibtn ibtn-danger" title="Move to trash" aria-label="Move to trash: <%= u.name %>"><%- icon('trash') %></button></form>
       <% } %>
     </div></td>
   </tr>

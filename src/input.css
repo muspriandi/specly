@@ -25,6 +25,10 @@ html.dark { color-scheme: dark; }
 /* Reusable UI pieces, built from Tailwind utilities. */
 @layer components {
   .view-tab { @apply -mb-px cursor-pointer whitespace-nowrap border-b-2 border-transparent px-4 py-2.5 text-sm font-medium text-slate-600 hover:text-slate-900 aria-selected:border-brand-600 aria-selected:text-brand-700 dark:text-slate-400 dark:hover:text-slate-100 dark:aria-selected:border-brand-400 dark:aria-selected:text-brand-400; }
+  .step-n { @apply mr-2 inline-grid size-5 place-items-center rounded-full bg-slate-200 text-xs font-semibold text-slate-700 dark:bg-slate-700 dark:text-slate-200; }
+  .view-tab[aria-selected=true] .step-n { @apply bg-brand-600 text-white; }
+  .view-tab[data-done] .step-n { @apply bg-emerald-600 text-white; }
+  .view-tab:disabled { @apply cursor-not-allowed opacity-50 hover:text-slate-600; }
   .badge-count { @apply ml-1 inline-block min-w-5 rounded-full bg-brand-600 px-1.5 text-center text-xs font-semibold leading-5 text-white; }
   .card   { @apply rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900; }
   .clip   { @apply inline-block max-w-[16rem] truncate align-bottom; }
@@ -37,12 +41,35 @@ html.dark { color-scheme: dark; }
   .btn-sm { @apply min-h-8 px-3 py-1.5 text-xs; }
   .btn-ghost { @apply border border-brand-600 bg-transparent text-brand-600 shadow-none hover:bg-brand-50 dark:border-brand-400 dark:text-brand-400 dark:hover:bg-slate-800; }
   .btn-danger { @apply bg-red-600 hover:bg-red-500 focus-visible:ring-red-500; }
+  .btn-secondary { @apply border border-slate-300 bg-white text-slate-800 shadow-none hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700; }
+  .btn-text { @apply bg-transparent text-slate-700 shadow-none hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800; }
+  .btn-icon { @apply size-9 min-h-0 p-0; }
+  .btn svg { @apply size-4 shrink-0; }
+  .btn:active:not(:disabled) { @apply translate-y-px shadow-none; }
   .btn[aria-busy="true"] { @apply pointer-events-none opacity-70; }
   .btn[aria-busy="true"]::before { content: ""; @apply size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent; }
 
+  .ibtn   { @apply inline-grid size-8 cursor-pointer place-items-center rounded-md text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white; }
+  .ibtn-danger { @apply text-red-700 hover:bg-red-50 hover:text-red-800 focus-visible:ring-red-500 dark:text-red-400 dark:hover:bg-red-950 dark:hover:text-red-300; }
+  .ibtn svg { @apply size-[1.1rem]; }
+  .ibtn[aria-busy="true"] { @apply pointer-events-none opacity-50; }
+  .toast-undo { @apply shrink-0 rounded px-2 py-0.5 text-sm font-semibold underline underline-offset-2 hover:bg-black/5 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-current disabled:opacity-60 dark:hover:bg-white/10; }
+  .sort-link { @apply inline-flex items-center gap-1 rounded hover:text-slate-900 focus-visible:outline-2 focus-visible:outline-brand-500 dark:hover:text-white; }
+  .sort-ind { @apply text-[10px] text-slate-400; }
+  th[aria-sort="ascending"] .sort-ind, th[aria-sort="descending"] .sort-ind { @apply text-brand-600 dark:text-brand-400; }
+  .sticky-head thead th { @apply sticky top-[var(--hdr,3.8rem)] z-[1] border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900; }
   .link   { @apply cursor-pointer rounded text-sm font-medium text-brand-600 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 dark:text-brand-400; }
   .link-danger { @apply cursor-pointer rounded text-sm font-medium text-red-700 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500 dark:text-red-400; }
 
+  /* Removable tag in a tag picker (e.g. the blueprints to assign on an invitation). */
+  .chip { @apply inline-flex items-center gap-1 rounded-full border border-brand-600/40 bg-brand-50 py-0.5 pl-2.5 pr-1 text-xs font-medium text-brand-700 dark:border-brand-400/40 dark:bg-slate-800 dark:text-brand-400; }
+  .chip button { @apply grid size-4 cursor-pointer place-items-center rounded-full text-sm leading-none hover:bg-brand-600/15 focus-visible:outline-2 focus-visible:outline-brand-500; }
+
+  /* Endpoint / field flags (deprecated, WIP status, nullable…): one shape everywhere, colour says what it is. */
+  .flag { @apply inline-block whitespace-nowrap rounded border px-1.5 align-middle text-[10px] font-semibold uppercase leading-4; }
+  .flag-neutral { @apply border-slate-300 text-slate-600 dark:border-slate-600 dark:text-slate-400; }
+  .flag-dep { @apply border-amber-500/70 bg-amber-50 text-amber-800 dark:border-amber-500/50 dark:bg-amber-950 dark:text-amber-300; }
+  .flag-wip { @apply border-violet-500/70 bg-violet-50 text-violet-800 dark:border-violet-400/50 dark:bg-violet-950 dark:text-violet-300; }
   .badge  { @apply inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium; }
   .badge-neutral { @apply border-slate-300 text-slate-600 dark:border-slate-700 dark:text-slate-300; }
   .badge-ok      { @apply border-emerald-600/50 bg-emerald-50 text-emerald-800 dark:border-emerald-500/40 dark:bg-emerald-950 dark:text-emerald-300; }
@@ -62,9 +89,23 @@ html.dark { color-scheme: dark; }
   /* Header navigation */
   .nav-link { @apply rounded-md px-2.5 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white; }
   .nav-link[aria-current="page"] { @apply bg-brand-50 text-brand-700 dark:bg-slate-800 dark:text-brand-400; }
-  .menu { @apply absolute right-0 z-20 mt-2 min-w-48 rounded-lg border border-slate-200 bg-white p-1 shadow-lg dark:border-slate-700 dark:bg-slate-900; }
-  .menu a, .menu button { @apply block w-full rounded-md px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800; }
-  .menu a[aria-current="page"] { @apply font-semibold text-brand-700 dark:text-brand-400; }
+  .menu { @apply absolute right-0 z-20 mt-2 min-w-56 origin-top-right rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl dark:border-slate-700 dark:bg-slate-900; animation: menu-in .14s ease-out; }
+  .menu a, .menu button { @apply flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-100 focus-visible:bg-slate-100 focus-visible:outline-none dark:text-slate-200 dark:hover:bg-slate-800 dark:focus-visible:bg-slate-800; }
+  .menu svg { @apply text-slate-500 dark:text-slate-400; }
+  .menu a[aria-current="page"] { @apply bg-brand-50 font-semibold text-brand-700 dark:bg-slate-800 dark:text-brand-400; }
+  .menu a[aria-current="page"] svg { @apply text-brand-600 dark:text-brand-400; }
+  .menu-label { @apply px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400; }
+  .menu-sep { @apply my-1 border-slate-200 dark:border-slate-700; }
+  details[open] > summary > svg:last-child { @apply rotate-180; }
+  summary > svg:last-child { @apply transition-transform duration-150; }
+  @keyframes menu-in { from { opacity: 0; transform: translateY(-4px) scale(.98); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) { .menu { animation: none; } }
+
+  /* Admin sub-navigation */
+  .subnav { @apply border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900; }
+  .subnav-in { @apply mx-auto flex max-w-6xl gap-1 overflow-x-auto px-4 sm:px-6; }
+  .subnav-link { @apply -mb-px inline-flex items-center gap-2 whitespace-nowrap border-b-2 border-transparent px-3 py-2.5 text-sm font-medium text-slate-600 hover:border-slate-300 hover:text-slate-900 dark:text-slate-400 dark:hover:border-slate-600 dark:hover:text-white; }
+  .subnav-link[aria-current="page"] { @apply border-brand-600 text-brand-700 dark:border-brand-400 dark:text-brand-400; }
 
   /* Empty states */
   .empty { @apply flex flex-col items-center gap-2 px-6 py-10 text-center text-sm text-slate-600 dark:text-slate-400; }

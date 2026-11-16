@@ -1,6 +1,7 @@
 <%- include('../partials/head') %>
 <nav aria-label="Breadcrumb" class="mb-3 flex items-center gap-2 text-sm"><a class="link" href="/manage/blueprints">Blueprints</a><span class="text-slate-400" aria-hidden="true">/</span><span class="min-w-0 truncate font-medium" title="<%= bp.title %>"><%= bp.title %></span></nav>
-<h1 class="text-2xl font-bold">Who can read this blueprint</h1>
+<h1 class="mb-3 text-2xl font-bold">Access</h1>
+<%- include('../partials/bp-tabs', { bp: bp, active: 'access' }) %>
 <p class="mb-4 mt-1 text-sm text-slate-600 dark:text-slate-400">Admins can read every blueprint. Members and guests can read it only when it is assigned to them here (or, for members, after an approved request).</p>
 <div class="grid items-start gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
   <section aria-labelledby="readers-h" class="min-w-0">
@@ -8,13 +9,13 @@
     <%- include('../partials/list-search', { placeholder: 'Search by name or email', filter: filter, selects: [
       { name: 'role', label: 'Filter by role', value: role, options: [['', 'All roles'], ['member', 'Member'], ['guest', 'Guest']] } ] }) %>
     <% if (readers.length) { %>
-    <form id="bulk" method="post" action="/manage/blueprints/<%= bp.id %>/access/revoke" class="mb-3 flex flex-wrap items-center gap-2" data-confirm="The selected users will no longer be able to read “<%= bp.title %>”." data-confirm-title="Remove access for the selected users?" data-confirm-action="Un-assign"><%- include('../partials/csrf') %>
+    <form id="bulk" method="post" action="/manage/blueprints/<%= bp.id %>/access/revoke" class="mb-3 flex flex-wrap items-center gap-2"><%- include('../partials/csrf') %>
       <span class="text-sm text-slate-600 dark:text-slate-400" data-bulk-count aria-live="polite">0 selected</span>
-      <button class="btn btn-sm btn-danger" data-bulk-btn disabled>Un-assign selected</button>
+      <button class="btn btn-sm btn-danger" data-bulk-btn disabled><%- icon('x') %>Un-assign selected</button>
     </form>
     <% } %>
-    <div class="card overflow-x-auto !p-0">
-      <% if (!readers.length) { %><div class="empty"><p><%= filter || role ? 'No assigned users match these filters.' : 'No members or guests can read this blueprint yet.' %></p></div><% } else { %>
+    <div class="card max-md:overflow-x-auto sticky-head !p-0">
+      <% if (!readers.length) { %><div class="empty"><%- icon('users', 'size-8') %><p class="font-medium text-slate-800 dark:text-slate-200"><%= filter || role ? 'No assigned users match these filters.' : 'No members or guests can read this yet' %></p><% if (!filter && !role) { %><p>Pick people under “Assign users” to give them access.</p><% } %></div><% } else { %>
       <table class="w-full text-sm">
         <caption class="sr-only">Users who can read <%= bp.title %></caption>
         <thead class="border-b border-slate-200 dark:border-slate-800"><tr><th scope="col" class="th w-10"><input type="checkbox" class="size-4 accent-brand-600" data-bulk-all aria-label="Select all users on this page"></th><th scope="col" class="th">User</th><th scope="col" class="th">Role</th><th scope="col" class="th">Since</th><th scope="col" class="th"><span class="sr-only">Actions</span></th></tr></thead>
@@ -24,7 +25,7 @@
           <td class="td"><div class="clip font-medium" title="<%= r.name %>"><%= r.name %></div><div class="clip text-xs text-slate-600 dark:text-slate-400" title="<%= r.email %>"><%= r.email %></div></td>
           <td class="td"><span class="badge <%= r.role === 'member' ? 'badge-ok' : 'badge-neutral' %>"><%= r.role %></span><% if (!r.active) { %> <span class="badge badge-bad">Disabled</span><% } %></td>
           <td class="td text-xs text-slate-600 dark:text-slate-400"><%= r.decided_at ? fmt(r.decided_at) : '—' %></td>
-          <td class="td"><form method="post" action="/manage/blueprints/<%= bp.id %>/access/<%= r.id %>/revoke" class="text-right" data-confirm="<%= r.name %> (<%= r.email %>) will no longer be able to read “<%= bp.title %>”." data-confirm-title="Remove this user's access?" data-confirm-action="Un-assign"><%- include('../partials/csrf') %><button class="link-danger">Un-assign</button></form></td>
+          <td class="td"><form method="post" action="/manage/blueprints/<%= bp.id %>/access/<%= r.id %>/revoke" class="text-right"><%- include('../partials/csrf') %><button class="ibtn ibtn-danger" title="Un-assign" aria-label="Un-assign: <%= r.name %>"><%- icon('x') %></button></form></td>
         </tr>
         <% }) %>
       </table>
@@ -48,7 +49,7 @@
         <% }) %>
       </div>
       <% if (candidates.length === 500) { %><p class="hint mt-1">Showing the first 500 users. Use the filter above.</p><% } %>
-      <button class="btn mt-3">Assign selected</button>
+      <button class="btn mt-3"><%- icon('plus') %>Assign selected</button>
     </form>
     <% } %>
   </section>

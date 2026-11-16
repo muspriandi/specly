@@ -4,7 +4,7 @@ const auth = require('../../services/auth');
 const trash = require('../../services/trash');
 const { audit } = require('../../services/audit');
 const { flash, notFound } = require('../../lib/http');
-const { paginate, limitSql, likeOf } = require('../../lib/paginate');
+const { paginate, limitSql, likeOf, sortOf } = require('../../lib/paginate');
 const access = require('../../services/access');
 const { ROLES, normEmail, isEmail, text, passwordError, firstError } = require('../../lib/validate');
 
@@ -22,8 +22,9 @@ router.get('/', async (req, res) => {
   if (status) conds.push(status === 'active' ? 'active' : 'NOT active');
   const where = conds.join(' AND ');
   const pg = await paginate(req, `SELECT COUNT(*)::int AS n FROM users WHERE ${where}`, params);
-  const users = await db.query(`SELECT id,email,name,role,active,created_at FROM users WHERE ${where} ORDER BY created_at DESC, id DESC ${limitSql(pg)}`, params);
-  res.render('admin/users', { title: 'Users', users, pg, filter, role, status, roles: ROLES });
+  const sort = sortOf(req, { name: 'lower(name)', email: 'lower(email)', role: 'role', status: 'active', created: 'created_at' }, 'created', 'desc');
+  const users = await db.query(`SELECT id,email,name,role,active,created_at FROM users WHERE ${where} ORDER BY ${sort.sql}, id DESC ${limitSql(pg)}`, params);
+  res.render('admin/users', { title: 'Users', users, pg, filter, role, status, roles: ROLES, sort });
 });
 
 router.get('/new', (req, res) => renderForm(res, 200, {}, true));
@@ -88,11 +89,25 @@ const revokeBlueprints = (pick) => async (req, res) => {
   if (!u) return notFound(res, 'User not found.');
   const done = await access.revoke([u.id], pick(req), req.user.id);
   if (done.length) await audit(req, 'user.access_changed', { type: 'user', id: u.id, detail: `Removed ${titles(done)} from ${u.email}` });
-  flash(res, done.length ? `Removed access to ${plural(done.length, 'blueprint')}.` : 'Select at least one blueprint first.', done.length ? 'success' : 'error');
+  flash(res, done.length ? `Removed access to ${plural(done.length, 'blueprint')}.` : 'Select at least one blueprint first.', done.length ? 'success' : 'error',
+    done.length && done.length <= 50 ? { url: `/manage/users/${u.id}/access`, body: done.map((d) => `bp=${d.blueprint_id}`).join('&') } : null);
   res.redirect(backTo(req));
 };
 router.post('/:id/access/revoke', revokeBlueprints((req) => [].concat(req.body.bp || [])));
 router.post('/:id/access/:bid/revoke', revokeBlueprints((req) => [req.params.bid]));
+
+router.post('/bulk-delete', async (req, res) => {
+  const ids = [...new Set([].concat(req.body.ids || []).map(Number).filter((n) => Number.isInteger(n) && n > 0 && n !== req.user.id))].slice(0, 200);
+  let n = 0;
+  for (const id of ids) {
+    const u = await trash.deleteUser(id, req.user.id);
+    if (!u) continue;
+    n += 1;
+    await audit(req, 'user.deleted', { type: 'user', id, detail: `Moved ${u.role} account ${u.email} (${u.name}) to the trash (bulk)` });
+  }
+  flash(res, n ? `${n} user${n === 1 ? '' : 's'} moved to the trash.` : 'Select at least one user first (you cannot delete yourself).', n ? 'success' : 'error');
+  res.redirect('/manage/users');
+});
 
 router.get('/:id/edit', async (req, res) => {
   const u = await getUser(req.params.id);
@@ -139,7 +154,7 @@ router.post('/:id/delete', async (req, res) => {
       await audit(req, 'user.deleted', { type: 'user', id: req.params.id,
         detail: `Moved ${u.role} account ${u.email} (${u.name}) to the trash${extra ? ` — ${extra}` : ''}` });
     }
-    flash(res, u ? `${u.name} moved to the trash. You can restore the account from Manage → Trash.` : 'User not found.', u ? 'success' : 'error');
+    flash(res, u ? `${u.name} moved to the trash.` : 'User not found.', u ? 'success' : 'error', u ? { url: `/manage/trash/users/${u.id}/restore` } : null);
   }
   res.redirect('/manage/users');
 });

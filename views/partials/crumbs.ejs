@@ -1,0 +1,4 @@
+<%# locals: items = [[label, href|null], ...]; the last item is the current page. %>
+<nav aria-label="Breadcrumb" class="mb-3 flex items-center gap-2 text-sm">
+  <% items.forEach(function (c, i) { %><% if (i) { %><span class="text-slate-400" aria-hidden="true">/</span><% } %><% if (c[1]) { %><a class="link" href="<%= c[1] %>"><%= c[0] %></a><% } else { %><span class="min-w-0 truncate font-medium" aria-current="page" title="<%= c[0] %>"><%= c[0] %></span><% } %><% }) %>
+</nav>

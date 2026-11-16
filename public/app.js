@@ -9,7 +9,7 @@
     error: '<circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/>',
     info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.5v.01"/>',
   };
-  window.toast = function (msg, type) {
+  window.toast = function (msg, type, undo) {
     const box = $('#toasts');
     if (!box || !msg) return;
     type = ICON[type] ? type : 'success';
@@ -29,10 +29,27 @@
     close.textContent = '×';
     const dismiss = () => { t.classList.add('toast-out'); setTimeout(() => t.remove(), 200); };
     close.addEventListener('click', dismiss);
-    t.append(ico, text, close);
+    t.append(ico, text);
+    if (undo) { // "Undo" posts the reverse action, then reloads so the page shows the restored state
+      const u = document.createElement('button');
+      u.type = 'button'; u.className = 'toast-undo'; u.textContent = 'Undo';
+      u.addEventListener('click', async () => {
+        u.disabled = true; u.textContent = 'Undoing…';
+        try {
+          const token = ($('meta[name=csrf-token]') || {}).content || '';
+          // redirect: 'manual' keeps the server's confirmation (its flash cookie is set on the 302) for the reload below
+          const r = await fetch(undo.url, { method: 'POST', credentials: 'same-origin', redirect: 'manual', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `_csrf=${encodeURIComponent(token)}${undo.body ? '&' + undo.body : ''}` });
+          if (!r.ok && r.type !== 'opaqueredirect') throw new Error('failed');
+          location.reload();
+        } catch { u.disabled = false; u.textContent = 'Undo'; window.toast('Could not undo. Try again from the Trash.', 'error'); }
+      });
+      text.after(u);
+    }
+    t.append(close);
     box.append(t);
     // Errors stay longer; hovering a toast pauses its timer.
-    let timer = setTimeout(dismiss, type === 'error' ? 8000 : 4500);
+    let timer = setTimeout(dismiss, type === 'error' ? 8000 : undo ? 9000 : 4500);
     t.addEventListener('mouseenter', () => clearTimeout(timer));
     t.addEventListener('mouseleave', () => { timer = setTimeout(dismiss, 2500); });
   };
@@ -52,12 +69,23 @@
     }
     confirmed = null;
     const btn = e.submitter || $('button:not([type=button])', form);
-    if (btn) setTimeout(() => btn.setAttribute('aria-busy', 'true'), 0); // after submit starts, so the click still counts
+    if (btn) {
+      const w = btn.offsetWidth; // keep the width so the button does not jump when the label changes
+      setTimeout(() => {
+        btn.setAttribute('aria-busy', 'true');
+        if (w) btn.style.minWidth = w + 'px';
+        if (btn.dataset.busy) { btn.dataset.label = btn.innerHTML; btn.textContent = btn.dataset.busy; }
+      }, 0); // after submit starts, so the click still counts
+    }
   });
-  window.addEventListener('pageshow', () => $$('[aria-busy]').forEach((b) => b.removeAttribute('aria-busy'))); // back button
+  window.addEventListener('pageshow', () => $$('[aria-busy]').forEach((b) => { // back button
+    b.removeAttribute('aria-busy'); b.style.minWidth = '';
+    if (b.dataset.label) { b.innerHTML = b.dataset.label; delete b.dataset.label; }
+  }));
 
   function openConfirm(form, msg, submitter) {
-    const danger = form.querySelector('.link-danger') || /delete|revoke/i.test(msg);
+    // Red confirm button for anything destructive: judged by the trigger's style and by the wording of the dialog.
+    const danger = form.querySelector('.link-danger, .btn-danger, .ibtn-danger') || /delete|revoke|trash|remove|un-assign/i.test(`${msg} ${form.dataset.confirmTitle || ''} ${form.dataset.confirmAction || ''}`);
     const d = document.createElement('dialog');
     d.className = 'modal';
     d.setAttribute('aria-labelledby', 'confirm-title');
@@ -97,8 +125,39 @@
   const menus = $$('details[data-menu]');
   menus.forEach((m) => m.addEventListener('toggle', () => { if (m.open) menus.forEach((o) => { if (o !== m) o.open = false; }); }));
   document.addEventListener('click', (e) => menus.forEach((m) => { if (m.open && !m.contains(e.target)) m.open = false; }));
+  menus.forEach((m) => m.addEventListener('keydown', (e) => { // arrow keys move through the items
+    const keys = ['ArrowDown', 'ArrowUp', 'Home', 'End'];
+    if (!keys.includes(e.key)) return;
+    const items = $$('a, button', m).filter((x) => x.offsetParent);
+    if (!items.length) return;
+    if (!m.open && e.target === $('summary', m) && e.key === 'ArrowDown') m.open = true;
+    e.preventDefault();
+    const i = items.indexOf(document.activeElement);
+    const n = e.key === 'Home' ? 0 : e.key === 'End' ? items.length - 1 : e.key === 'ArrowDown' ? (i + 1) % items.length : (i <= 0 ? items.length - 1 : i - 1);
+    items[n].focus();
+  }));
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') menus.forEach((m) => { if (m.open) { m.open = false; $('summary', m).focus(); } });
+  });
+
+  // Sticky table headers sit just below the sticky page header, whatever height it has (it wraps on phones).
+  const pageHeader = $('body > header');
+  if (pageHeader) {
+    const setHdr = () => document.documentElement.style.setProperty('--hdr', `${pageHeader.offsetHeight}px`);
+    setHdr();
+    if (window.ResizeObserver) new ResizeObserver(setHdr).observe(pageHeader); else window.addEventListener('resize', setHdr);
+  }
+
+  // Row menus sit inside scrolling tables, so they are positioned against the viewport instead of the cell.
+  $$('details.rowmenu').forEach((m) => {
+    const menu = $('.menu', m);
+    const place = () => {
+      const r = $('summary', m).getBoundingClientRect();
+      const up = r.bottom + menu.offsetHeight + 12 > innerHeight && r.top > menu.offsetHeight + 12;
+      Object.assign(menu.style, { position: 'fixed', left: 'auto', right: `${Math.max(8, innerWidth - r.right)}px`, top: up ? `${r.top - menu.offsetHeight - 4}px` : `${r.bottom + 4}px`, marginTop: '0' });
+    };
+    m.addEventListener('toggle', () => { if (m.open) place(); });
+    ['scroll', 'resize'].forEach((ev) => window.addEventListener(ev, () => { if (m.open) m.open = false; }, { passive: true }));
   });
 
   // ---- theme toggle ----
@@ -117,12 +176,78 @@
     try { localStorage.setItem('theme', dark ? 'dark' : 'light'); } catch { /* storage unavailable */ }
   });
 
-  // ---- global search shortcuts: "/" or Ctrl/Cmd+K ----
+  // ---- command palette: Ctrl/Cmd+K jumps to any page, blueprint or endpoint ----
+  (function palette() {
+    const data = $('#cmd-data');
+    if (!data || typeof HTMLDialogElement === 'undefined') return;
+    let cmds = [];
+    try { cmds = JSON.parse(data.dataset.cmds); } catch { return; }
+    const mk = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
+    const dlg = mk('dialog', 'm-auto mt-[12vh] w-[min(36rem,calc(100vw-2rem))] rounded-xl border border-slate-200 bg-white p-0 text-slate-900 shadow-2xl backdrop:bg-slate-900/50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100');
+    dlg.setAttribute('aria-label', 'Command palette');
+    const input = mk('input', 'w-full rounded-t-xl border-0 border-b border-slate-200 bg-transparent px-4 py-3 text-sm outline-none placeholder:text-slate-500 dark:border-slate-700');
+    input.type = 'text'; input.placeholder = 'Jump to a page, blueprint or endpoint…'; input.setAttribute('role', 'combobox');
+    input.setAttribute('aria-expanded', 'true'); input.setAttribute('aria-controls', 'palette-list'); input.setAttribute('aria-label', 'Search commands');
+    const list = mk('div', 'max-h-[50vh] overflow-auto p-1.5'); list.id = 'palette-list'; list.setAttribute('role', 'listbox');
+    const foot = mk('div', 'border-t border-slate-200 px-4 py-2 text-xs text-slate-600 dark:border-slate-700 dark:text-slate-400', '↑ ↓ to move · Enter to open · Esc to close');
+    dlg.append(input, list, foot);
+    document.body.append(dlg);
+    let items = [], at = 0, remote = [], seq = 0, timer;
+    const run = (it) => {
+      dlg.close();
+      if (it.a === 'theme') { const b = $('[data-theme-toggle]'); if (b) b.click(); } else if (it.h) location.href = it.h;
+    };
+    const paint = () => {
+      const q = input.value.trim().toLowerCase();
+      const local = cmds.filter((c) => !q || c.t.toLowerCase().includes(q) || c.g.toLowerCase().includes(q));
+      items = local.concat(remote);
+      at = Math.min(at, Math.max(0, items.length - 1));
+      list.replaceChildren(...(items.length ? items.map((it, i) => {
+        const row = mk('div', `flex cursor-pointer items-center justify-between gap-3 rounded-md px-3 py-2 text-sm ${i === at ? 'bg-brand-50 text-brand-700 dark:bg-slate-800 dark:text-brand-400' : ''}`);
+        row.setAttribute('role', 'option'); row.setAttribute('aria-selected', String(i === at)); row.id = `pal-${i}`;
+        row.append(mk('span', 'min-w-0 truncate', it.t), mk('span', 'shrink-0 text-xs text-slate-500 dark:text-slate-400', it.g));
+        row.addEventListener('mousemove', () => { if (at !== i) { at = i; paint(); } });
+        row.addEventListener('click', () => run(it));
+        return row;
+      }) : [mk('p', 'px-3 py-4 text-sm text-slate-600 dark:text-slate-400', 'No matches.')]));
+      input.setAttribute('aria-activedescendant', items.length ? `pal-${at}` : '');
+      const cur = $(`#pal-${at}`, list); if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: 'nearest' });
+    };
+    input.addEventListener('input', () => {
+      at = 0; paint(); clearTimeout(timer);
+      const q = input.value.trim();
+      if (q.length < 2) { remote = []; paint(); return; }
+      timer = setTimeout(async () => {
+        const mine = ++seq;
+        try {
+          const d = await (await fetch(`/search/suggest?q=${encodeURIComponent(q)}`, { credentials: 'same-origin' })).json();
+          if (mine !== seq) return;
+          remote = d.blueprints.map((b) => ({ t: b.title, h: `/blueprints/${b.id}`, g: 'Blueprint' }))
+            .concat(d.endpoints.map((e) => ({ t: `${e.method} ${e.path}`, h: e.href, g: e.blueprint })));
+          paint();
+        } catch { /* offline: local commands still work */ }
+      }, 180);
+    });
+    dlg.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); if (items.length) { at = (at + (e.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length; paint(); } }
+      else if (e.key === 'Enter' && items[at]) { e.preventDefault(); run(items[at]); }
+    });
+    dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); });
+    document.addEventListener('keydown', (e) => {
+      if (e.key.toLowerCase() === 'k' && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        if (dlg.open) { dlg.close(); return; }
+        input.value = ''; remote = []; at = 0; paint(); dlg.showModal(); input.focus();
+      }
+    });
+  })();
+
+  // ---- global search shortcuts: "/" focuses the search box ----
   document.addEventListener('keydown', (e) => {
     const input = $('[data-global-search]');
     if (!input) return;
     const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName) || document.activeElement.isContentEditable;
-    if ((e.key === 'k' && (e.metaKey || e.ctrlKey)) || (e.key === '/' && !typing && !e.metaKey && !e.ctrlKey)) {
+    if (e.key === '/' && !typing && !e.metaKey && !e.ctrlKey) {
       e.preventDefault();
       input.focus();
       input.select();
@@ -167,7 +292,10 @@
   const err = $('.alert-error');
   if (err) { err.setAttribute('role', 'alert'); window.toast(err.textContent.trim(), 'error'); }
   const flash = $('[data-flash]');
-  if (flash) { window.toast(flash.textContent.trim(), flash.dataset.flashType || toneOf(flash.textContent)); flash.remove(); }
+  if (flash) {
+    window.toast(flash.textContent.trim(), flash.dataset.flashType || toneOf(flash.textContent), flash.dataset.undoUrl ? { url: flash.dataset.undoUrl, body: flash.dataset.undoBody || '' } : null);
+    flash.remove();
+  }
 
 
   // ---- sortable tables: <table data-sortable>; header click toggles ascending/descending ----
@@ -249,6 +377,71 @@
     render();
   });
 
+  // ---- tag picker: type a few letters, pick from a short list, get a removable chip (one hidden input per chip) ----
+  // <div data-tag-picker data-src="/url" data-name="field" data-min="3">: the endpoint answers { items: [{ id, title }] } and takes ?q= and ?exclude=1,2.
+  $$('[data-tag-picker]').forEach((box) => {
+    const input = $('input[type=text]', box), tags = $('[data-tags]', box), list = $('[role=listbox]', box), status = $('[data-tag-status]', box);
+    const min = Number(box.dataset.min) || 3, name = box.dataset.name, src = box.dataset.src;
+    const mk = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
+    const hint = status.textContent;
+    let items = [], at = -1, seq = 0, timer = 0;
+    const picked = () => $$(`[data-tag] input[name="${name}"]`, box).map((i) => i.value);
+    const close = () => { list.hidden = true; input.setAttribute('aria-expanded', 'false'); input.removeAttribute('aria-activedescendant'); at = -1; };
+    const mark = (i) => {
+      at = i;
+      $$('[role=option]', list).forEach((o, k) => { o.setAttribute('aria-selected', String(k === i)); o.classList.toggle('bg-brand-50', k === i); o.classList.toggle('dark:bg-slate-800', k === i); });
+      if (i >= 0) { input.setAttribute('aria-activedescendant', `${list.id}-${i}`); const cur = $(`#${list.id}-${i}`, list); if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: 'nearest' }); }
+    };
+    const add = (it) => {
+      if (picked().includes(String(it.id))) return;
+      const chip = mk('span', 'chip'); chip.setAttribute('data-tag', '');
+      const hid = mk('input'); hid.type = 'hidden'; hid.name = name; hid.value = String(it.id);
+      const x = mk('button', null, '×'); x.type = 'button'; x.setAttribute('aria-label', `Remove ${it.title}`);
+      const label = mk('span', 'max-w-56 truncate', it.title); label.title = it.title;
+      chip.append(hid, label, x); input.before(chip);
+      input.value = ''; close(); input.focus(); status.textContent = `Added ${it.title}.`;
+    };
+    tags.addEventListener('click', (e) => { // drop a chip (works for the server-rendered ones too)
+      const b = e.target.closest('[data-tag] button');
+      if (b) { const chip = b.closest('[data-tag]'); const t = chip.querySelector('span').textContent; chip.remove(); status.textContent = `Removed ${t}.`; }
+      input.focus();
+    });
+    const paint = () => {
+      list.replaceChildren(...(items.length ? items.map((it, i) => {
+        const o = mk('div', 'flex cursor-pointer items-center justify-between gap-3 rounded-md px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-800');
+        o.id = `${list.id}-${i}`; o.setAttribute('role', 'option'); o.setAttribute('aria-selected', 'false');
+        const text = mk('span', 'min-w-0 flex-1');
+        text.append(mk('span', 'block truncate font-medium', it.title), mk('span', 'block truncate text-xs text-slate-600 dark:text-slate-400', (it.description || '').replace(/\s+/g, ' ').trim() || 'No description'));
+        o.title = it.description ? `${it.title}: ${it.description}` : it.title;
+        o.append(text, mk('span', 'shrink-0 self-start text-xs text-slate-600 dark:text-slate-400', it.version ? `v${it.version}` : ''));
+        o.addEventListener('mousedown', (e) => { e.preventDefault(); add(it); }); // mousedown: runs before the input loses focus
+        return o;
+      }) : [mk('p', 'px-3 py-2 text-sm text-slate-600 dark:text-slate-400', 'No blueprints match.')]));
+      list.hidden = false; input.setAttribute('aria-expanded', 'true'); mark(items.length ? 0 : -1);
+      status.textContent = items.length ? `${items.length} match${items.length === 1 ? '' : 'es'}. Use the arrow keys and Enter.` : 'No blueprints match.';
+    };
+    input.addEventListener('input', () => {
+      clearTimeout(timer);
+      const q = input.value.trim();
+      if (q.length < min) { close(); status.textContent = q ? `Type ${min - q.length} more letter${min - q.length === 1 ? '' : 's'}.` : hint; return; }
+      timer = setTimeout(async () => {
+        const mine = ++seq;
+        try {
+          const r = await (await fetch(`${src}?q=${encodeURIComponent(q)}&exclude=${picked().join(',')}`, { credentials: 'same-origin' })).json();
+          if (mine !== seq) return;
+          items = r.items || []; paint();
+        } catch { close(); status.textContent = 'Could not load blueprints. Try again.'; }
+      }, 200);
+    });
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { if (!list.hidden && items.length) { e.preventDefault(); mark((at + (e.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length); } }
+      else if (e.key === 'Enter') { e.preventDefault(); if (!list.hidden && items[at]) add(items[at]); } // Enter never submits the form from this field
+      else if (e.key === 'Escape') { if (!list.hidden) { e.preventDefault(); e.stopPropagation(); close(); } }
+      else if (e.key === 'Backspace' && !input.value) { const last = $$('[data-tag]', box).pop(); if (last) last.remove(); }
+    });
+    input.addEventListener('blur', close);
+  });
+
 
   // ---- bulk selection on the requests page ----
   const all = $('[data-bulk-all]');
@@ -258,6 +451,7 @@
       const n = rows.filter((r) => r.checked).length;
       $('[data-bulk-count]').textContent = `${n} selected`;
       $$('[data-bulk-btn]').forEach((b) => { b.disabled = n === 0; });
+      $$('[data-bulk-autohide]').forEach((f) => { f.hidden = n === 0; }); // lists with many rows: show the bar only once something is ticked
       all.checked = n === rows.length;
       all.indeterminate = n > 0 && n < rows.length;
     };
@@ -272,8 +466,9 @@
     const wrap = el('div', 'mb-4 mt-1 overflow-hidden rounded-lg border border-slate-300 bg-white focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/30 dark:border-slate-700 dark:bg-slate-950');
     const bar = el('div', 'flex flex-wrap items-center gap-1 border-b border-slate-200 bg-slate-50 px-2 py-1.5 dark:border-slate-800 dark:bg-slate-900');
     const body = el('div', 'flex items-start');
-    const gutter = el('div', 'min-w-[3rem] shrink-0 select-none overflow-hidden whitespace-pre bg-slate-50 py-2 pl-3 pr-2 text-right font-mono text-xs leading-5 text-slate-500 dark:bg-slate-900 dark:text-slate-400');
+    const gutter = el('div', 'relative min-w-[3rem] shrink-0 select-none overflow-hidden whitespace-pre bg-slate-50 py-2 pl-3 pr-2 text-right font-mono text-xs leading-5 text-slate-500 dark:bg-slate-900 dark:text-slate-400');
     gutter.setAttribute('aria-hidden', 'true');
+    const nums = el('span'); gutter.append(nums);
     const status = el('div', 'flex flex-wrap justify-between gap-2 border-t border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400');
     const pos = el('span'), size = el('span');
     const hint = el('span', 'hidden sm:inline', 'Tab indents · Esc then Tab leaves the editor');
@@ -285,7 +480,7 @@
     };
     // Syntax colours: a <pre> sits behind the (transparent-text) textarea and is scrolled in step with it.
     ta.className = 'editor-ta relative block w-full resize-y border-0 bg-transparent px-3 py-2 font-mono text-xs leading-5 text-transparent caret-slate-900 outline-none selection:bg-brand-500/30 dark:caret-slate-100';
-    ta.style.height = 'clamp(16rem, 58vh, 40rem)'; // follows the window instead of a fixed 22 rows; still drag-resizable
+    ta.style.height = 'clamp(18rem, 55vh, 38rem)'; // follows the window instead of a fixed 22 rows; still drag-resizable
     const field = el('div', 'relative min-w-0 flex-1');
     const layer = el('div', 'pointer-events-none absolute inset-0 overflow-hidden');
     layer.setAttribute('aria-hidden', 'true');
@@ -307,7 +502,7 @@
       return text.split('\n').map((line) => {
         let head = '', rest = line;
         if (!json) { // YAML: unquoted keys at the start of a line
-          const m = /^(\s*(?:-\s+)*)([^\s"'#:{[\-][^:#]*?)(:)(?=\s|$)/.exec(line);
+          const m = /^(\s*(?:-\s+)*)([^\s"'#:{[-][^:#]*?)(:)(?=\s|$)/.exec(line);
           if (m) { head = esc(m[1]) + paint(m[2], 'key') + esc(m[3]); rest = line.slice(m[0].length); }
         }
         let out = '', last = 0, t;
@@ -340,6 +535,19 @@
     };
     ta.addEventListener('editor:load', (e) => set(e.detail));
     ta.addEventListener('editor:goto', (e) => goTo(e.detail.line, e.detail.column));
+    // Markers beside the line numbers: ✕ for a syntax error, ! for a suggestion. Sent by the form after each validation.
+    const markEls = [];
+    ta.addEventListener('editor:marks', (e) => {
+      markEls.splice(0).forEach((n) => n.remove());
+      const list = e.detail || [];
+      list.forEach((m) => {
+        if (!m.line) return;
+        const d = el('span', `absolute left-0.5 grid h-5 w-3.5 place-items-center text-[10px] font-bold ${m.kind === 'error' ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}`, m.kind === 'error' ? '✕' : '!');
+        d.style.top = `${8 + (m.line - 1) * 20}px`; d.title = m.message; gutter.append(d); markEls.push(d);
+      });
+      const bad = list.find((m) => m.kind === 'error' && m.line);
+      if (bad) { errBar.style.top = `${8 + (bad.line - 1) * 20}px`; errBar.classList.remove('hidden'); } else errBar.classList.add('hidden');
+    });
     ta.addEventListener('input', () => errBar.classList.add('hidden'));
     // Insert through the browser's editing pipeline so Ctrl/Cmd+Z keeps working; fall back to setRangeText.
     const insert = (txt, from, to) => {
@@ -349,7 +557,7 @@
     const set = (v) => { ta.focus(); ta.select(); if (!document.execCommand || !document.execCommand(v ? 'insertText' : 'delete', false, v)) { ta.value = v; ta.dispatchEvent(new Event('input', { bubbles: true })); } };
     const refresh = () => {
       const lines = ta.value.split('\n').length;
-      if (gutter.dataset.n !== String(lines)) { gutter.dataset.n = lines; gutter.textContent = Array.from({ length: lines }, (_, i) => i + 1).join('\n'); }
+      if (gutter.dataset.n !== String(lines)) { gutter.dataset.n = lines; nums.textContent = Array.from({ length: lines }, (_, i) => i + 1).join('\n'); }
       const before = ta.value.slice(0, ta.selectionStart).split('\n');
       pos.textContent = `Ln ${before.length}, Col ${before[before.length - 1].length + 1}`;
       size.textContent = `${lines} line${lines === 1 ? '' : 's'} · ${(new Blob([ta.value]).size / 1024).toFixed(1)} KB`;
@@ -396,6 +604,81 @@
       }
       escaped = false;
     });
+    // ---- Find / replace (Ctrl/Cmd+F inside the editor): every match is shaded, the current one is selected and scrolled into view ----
+    const marks = el('pre', 'pointer-events-none absolute left-0 top-0 px-3 py-2 font-mono text-xs leading-5 text-transparent');
+    inner.insertBefore(marks, pre);
+    const fbar = el('div', 'hidden flex-wrap items-center gap-1.5 border-b border-slate-200 bg-white px-2 py-1.5 text-xs dark:border-slate-800 dark:bg-slate-950');
+    fbar.setAttribute('role', 'search');
+    const fIn = el('input', 'field !mt-0 !w-44 !py-1 text-xs'); fIn.type = 'text'; fIn.placeholder = 'Find'; fIn.setAttribute('aria-label', 'Find in the editor'); fIn.autocomplete = 'off'; fIn.spellcheck = false;
+    const rIn = el('input', 'field !mt-0 !w-44 !py-1 text-xs'); rIn.type = 'text'; rIn.placeholder = 'Replace with'; rIn.setAttribute('aria-label', 'Replace with'); rIn.autocomplete = 'off'; rIn.spellcheck = false;
+    const fCount = el('span', 'min-w-16 text-slate-600 dark:text-slate-400'); fCount.setAttribute('aria-live', 'polite');
+    const fBtn = (label, title, fn, aria) => { const b = el('button', 'rounded px-2 py-1 font-medium text-slate-700 hover:bg-slate-200 focus-visible:outline-2 focus-visible:outline-brand-500 aria-pressed:bg-brand-600 aria-pressed:text-white dark:text-slate-300 dark:hover:bg-slate-800', label); b.type = 'button'; b.title = title; b.setAttribute('aria-label', aria || title); b.addEventListener('click', fn); return b; };
+    let found = [], at = -1, matchCase = false;
+    const norm = (t) => (matchCase ? t : t.toLowerCase());
+    const paintMarks = () => {
+      if (fbar.classList.contains('hidden') || !found.length) { marks.innerHTML = ''; return; }
+      const v = ta.value, n = fIn.value.length;
+      let out = '', last = 0;
+      found.forEach((i, k) => { out += esc(v.slice(last, i)) + `<mark class="rounded-sm ${k === at ? 'bg-orange-400/70' : 'bg-yellow-300/60 dark:bg-yellow-400/40'} text-transparent">${esc(v.slice(i, i + n))}</mark>`; last = i + n; });
+      marks.innerHTML = out + esc(v.slice(last)) + '\n';
+    };
+    const showCount = () => { fCount.textContent = !fIn.value ? '' : found.length ? `${at + 1} of ${found.length}` : 'No results'; };
+    const scan = (keep) => {
+      found = [];
+      const q = norm(fIn.value), v = norm(ta.value);
+      if (q) { for (let i = v.indexOf(q); i !== -1 && found.length < 5000; i = v.indexOf(q, i + q.length)) found.push(i); }
+      const from = ta.selectionStart;
+      at = found.length ? (keep ? Math.max(0, found.findIndex((i) => i >= from)) : 0) : -1;
+      if (found.length && at === -1) at = 0;
+      showCount(); paintMarks();
+    };
+    const reveal = () => {
+      if (at < 0) return;
+      const i = found[at], before = ta.value.slice(0, i), line = before.split('\n').length - 1, col = i - (before.lastIndexOf('\n') + 1);
+      ta.setSelectionRange(i, i + fIn.value.length);
+      const top = line * 20, view = ta.clientHeight;
+      if (top < ta.scrollTop + 20 || top > ta.scrollTop + view - 60) ta.scrollTop = Math.max(0, top - Math.round(view / 3));
+      const x = col * 7.3;
+      if (x < ta.scrollLeft || x > ta.scrollLeft + ta.clientWidth - 80) ta.scrollLeft = Math.max(0, x - 80);
+      sync(); showCount(); paintMarks();
+    };
+    const step = (d) => { if (!found.length) return; at = (at + d + found.length) % found.length; reveal(); };
+    const replaceOne = () => {
+      if (at < 0) return;
+      const i = found[at]; insert(rIn.value, i, i + fIn.value.length);
+      scan(true); reveal();
+    };
+    const replaceAll = () => {
+      if (!found.length) return;
+      const n = found.length, v = ta.value, len = fIn.value.length;
+      let out = '', last = 0; found.forEach((i) => { out += v.slice(last, i) + rIn.value; last = i + len; });
+      set(out + v.slice(last)); scan(false); window.toast(`Replaced ${n} match${n === 1 ? '' : 'es'}`);
+    };
+    const closeFind = () => { fbar.classList.add('hidden'); fbar.classList.remove('flex'); marks.innerHTML = ''; ta.focus(); };
+    const openFind = () => {
+      const sel = ta.value.slice(ta.selectionStart, ta.selectionEnd);
+      if (sel && !sel.includes('\n')) fIn.value = sel;
+      fbar.classList.remove('hidden'); fbar.classList.add('flex');
+      scan(true); fIn.focus(); fIn.select();
+    };
+    fbar.append(fIn, fCount,
+      fBtn('↑', 'Previous match (Shift+Enter)', () => step(-1), 'Previous match'), fBtn('↓', 'Next match (Enter)', () => step(1), 'Next match'),
+      (() => { const b = fBtn('Aa', 'Match case', () => { matchCase = !matchCase; b.setAttribute('aria-pressed', String(matchCase)); scan(true); reveal(); }, 'Match case'); b.setAttribute('aria-pressed', 'false'); return b; })(),
+      rIn, fBtn('Replace', 'Replace this match', replaceOne), fBtn('All', 'Replace all matches', replaceAll, 'Replace all matches'), fBtn('✕', 'Close (Esc)', closeFind, 'Close find'));
+    body.before(fbar);
+    fIn.addEventListener('input', () => { scan(true); reveal(); });
+    fbar.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); closeFind(); }
+      else if (e.key === 'Enter') { e.preventDefault(); if (e.target === rIn) replaceOne(); else step(e.shiftKey ? -1 : 1); }
+    });
+    ta.addEventListener('input', () => { if (!fbar.classList.contains('hidden')) scan(true); });
+    wrap.addEventListener('keydown', (e) => {
+      const mod = e.metaKey || e.ctrlKey;
+      if (mod && e.key.toLowerCase() === 'f') { e.preventDefault(); openFind(); }
+      else if ((mod && e.key.toLowerCase() === 'g') || e.key === 'F3') { e.preventDefault(); if (fbar.classList.contains('hidden')) openFind(); else step(e.shiftKey ? -1 : 1); }
+    });
+    const findBtn = tool('Find', 'Find and replace (Ctrl/Cmd+F)', () => setTimeout(openFind, 0));
+    bar.prepend(findBtn);
     refresh(); repaint();
   });
 
@@ -403,29 +686,48 @@
   const bpForm = $('form[data-preview]');
   if (bpForm) {
     const box = $('#bp-preview'), bar = $('#bar-summary'), save = $('[data-save]', bpForm), note = $('[data-note]', bpForm);
-    const frame = $('#bp-frame'), pvEmpty = $('#pv-empty'), changesBody = $('#changes-body'), count = $('[data-changes-count]');
+    const back = $('[data-back]', bpForm), next = $('[data-next]', bpForm), cancel = $('[data-cancel]', bpForm);
+    const frame = $('#bp-frame'), stage = $('#pv-stage'), pvEmpty = $('#pv-empty'), changesBody = $('#changes-body'), count = $('[data-changes-count]');
     const views = $$('[data-views] [role=tab]');
     const area = () => $('textarea[name=content]', bpForm);
     const mk = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
     const METHOD = (k) => { const m = k.split(' ')[0]; return ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(m) ? m.toLowerCase() : 'other'; };
     const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
-    let timer = 0, seq = 0, last = null, previewStale = true;
+    let timer = 0, seq = 0, last = null, previewStale = true, warnOpen = false, forceHash = '';
 
+    let step = 0, reached = 0, pending = false; // reached: furthest step visited in order; editing resets it, so Preview can't be skipped
+    const NEXT = ['Next: Preview →', 'Next: Review changes →'];
+    const canGo = () => !!(last && last.ok) && !pending;
+    const refreshNav = () => {
+      views.forEach((t, i) => {
+        t.disabled = i > 0 && (!canGo() || i > reached);
+        if (i < step && canGo()) t.setAttribute('data-done', ''); else t.removeAttribute('data-done');
+        $('.step-n', t).textContent = i < step && canGo() ? '✓' : String(i + 1);
+      });
+      back.hidden = step === 0; cancel.hidden = step !== 0;
+      next.hidden = step === 2; next.disabled = !canGo(); next.textContent = NEXT[step] || '';
+      save.hidden = step !== 2;
+    };
+    const go = (i) => { view(views[i].id); window.scrollTo({ top: 0 }); views[i].focus(); };
+    next.addEventListener('click', () => { if (canGo() && step < 2) go(step + 1); });
+    back.addEventListener('click', () => { if (step > 0) go(step - 1); });
     const view = (id) => {
       views.forEach((t) => {
         const on = t.id === id;
         t.setAttribute('aria-selected', String(on)); t.tabIndex = on ? 0 : -1;
         document.getElementById(t.getAttribute('aria-controls')).hidden = !on;
       });
+      step = views.findIndex((t) => t.id === id);
+      reached = Math.max(reached, step);
+      refreshNav();
       if (id === 'view-preview') { syncPreview(); if (last && last.ok && (!rendered || previewStale)) renderPreview(); }
     };
-    $$('[data-goto]', bpForm).forEach((b) => b.addEventListener('click', () => { view(b.dataset.goto); window.scrollTo({ top: 0 }); }));
     views.forEach((t) => {
-      t.addEventListener('click', () => view(t.id));
+      t.addEventListener('click', () => { if (!t.disabled) view(t.id); });
       t.addEventListener('keydown', (e) => {
         const i = views.indexOf(t), d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
         if (!d) return;
-        e.preventDefault(); const n = views[(i + d + views.length) % views.length]; n.focus(); view(n.id);
+        e.preventDefault(); const n = views[(i + d + views.length) % views.length]; if (n.disabled) return; n.focus(); view(n.id);
       });
     });
 
@@ -454,17 +756,29 @@
       else d.append(mk('span', 'text-slate-500 line-through', from || '—'), mk('span', 'text-slate-400', '→'), mk('span', 'font-medium', to || '—'));
       return d;
     };
-    const group = (title, cls, list) => {
+    const group = (title, cls, list, link) => {
       const g = mk('section', 'mt-4');
       g.append(mk('h3', `mb-1 text-sm font-semibold ${cls}`, `${title} (${list.length})`));
       const ul = mk('ul', 'divide-y divide-slate-100 rounded-lg border border-slate-200 dark:divide-slate-800 dark:border-slate-700');
-      list.forEach((k) => {
+      const LIMIT = 30; // big imports can add hundreds of endpoints: show the first few, reveal the rest on request
+      const add = (k) => {
         const li = mk('li', 'flex items-center gap-3 px-3 py-1.5');
         const sp = k.indexOf(' ');
         li.append(mk('span', `method m-${METHOD(k)} shrink-0`, k.slice(0, sp)), mk('span', 'min-w-0 truncate font-mono text-xs', k.slice(sp + 1)));
+        if (link) { // jump to this endpoint in the Preview step
+          const b = mk('button', 'link ml-auto shrink-0 !text-xs', 'Preview'); b.type = 'button'; b.setAttribute('aria-label', `Preview ${k}`);
+          b.addEventListener('click', () => openInPreview(k)); li.append(b);
+        }
         li.title = k; ul.append(li);
-      });
-      g.append(ul); return g;
+      };
+      list.slice(0, LIMIT).forEach(add);
+      g.append(ul);
+      if (list.length > LIMIT) {
+        const more = mk('button', 'link mt-2 text-xs', `Show ${list.length - LIMIT} more`); more.type = 'button';
+        more.addEventListener('click', () => { list.slice(LIMIT).forEach(add); more.remove(); });
+        g.append(more);
+      }
+      return g;
     };
     const renderChanges = (r) => {
       changesBody.replaceChildren();
@@ -476,8 +790,9 @@
       }
       if (d.same) { changesBody.append(mk('p', 'empty', 'No changes: this is identical to the current revision, so publishing would not create a new version.')); return; }
       changesBody.append(row('Title', c && c.title, r.title), row('Version', c && (c.version ? 'v' + c.version : 'none'), r.version ? 'v' + r.version : 'none'));
-      if (d.added.length) changesBody.append(group('Added', 'text-emerald-700 dark:text-emerald-400', d.added));
-      if (d.changed.length) changesBody.append(group('Changed', 'text-amber-700 dark:text-amber-400', d.changed));
+      if (d.added.length) changesBody.append(group('Added', 'text-emerald-700 dark:text-emerald-400', d.added, true));
+      if (d.changed.length) changesBody.append(group('Changed', 'text-amber-700 dark:text-amber-400', d.changed, true));
+      if (d.deprecated && d.deprecated.length) changesBody.append(group('Newly deprecated', 'text-slate-700 dark:text-slate-300', d.deprecated));
       if (d.removed.length) {
         changesBody.append(group('Removed', 'text-red-700 dark:text-red-400', d.removed));
         changesBody.append(mk('p', 'mt-2 text-xs text-red-700 dark:text-red-400', 'Removed endpoints can break clients that still call them.'));
@@ -507,11 +822,10 @@
           if (c && c.version !== r.version) bar.append(mk('span', 'mr-2 font-medium', `${v(c.version)} → ${v(r.version)}`));
           const n = (sym, len, cls) => { const s = mk('span', `mr-2 font-mono text-xs font-semibold ${cls}`, `${sym}${len}`); s.title = ({ '+': 'added', '~': 'changed', '−': 'removed' })[sym]; return s; };
           bar.append(n('+', d.added.length, 'text-emerald-700 dark:text-emerald-400'), n('~', d.changed.length, 'text-amber-700 dark:text-amber-400'), n('−', d.removed.length, 'text-red-700 dark:text-red-400'));
-          const more = mk('button', 'link text-xs', 'Review'); more.type = 'button'; more.addEventListener('click', () => view('view-changes')); bar.append(more);
         } else bar.append(mk('span', 'font-medium', `${r.title}${r.version ? ' · v' + r.version : ''} · ${plural(r.endpointCount, 'endpoint')}`));
       }
       save.disabled = !ok;
-      $$('[data-goto]', bpForm).forEach((b) => { b.disabled = !(r && r.ok); });
+      refreshNav();
       const n = r && r.ok && r.diff && !r.diff.same ? r.diff.added.length + r.diff.changed.length + r.diff.removed.length : 0;
       count.textContent = String(n); count.classList.toggle('hidden', !n);
       if (note && !note.dataset.touched) note.value = r && r.ok && r.diff && !r.diff.same ? suggest(r.diff) : '';
@@ -522,7 +836,7 @@
     let rendered = false;
     function syncPreview() {
       const ok = !!(last && last.ok);
-      frame.classList.toggle('hidden', !rendered); pvEmpty.hidden = rendered;
+      stage.classList.toggle('hidden', !rendered); pvEmpty.hidden = rendered;
       pvEmpty.textContent = ok ? 'The preview appears here when you open this tab.' : last ? 'Fix the error in the Edit tab to preview it.' : 'Add valid content in the Edit tab, to preview it.';
       pvHint.textContent = !rendered ? '' : !ok ? 'The draft has an error; showing the last render.' : previewStale ? 'Out of date.' : 'Up to date.';
     }
@@ -530,15 +844,64 @@
       if (!(last && last.ok)) return;
       let hash = '';
       try { hash = frame.contentWindow.location.hash; } catch { /* first load */ }
-      frame.dataset.hash = hash;
+      frame.dataset.hash = forceHash || hash; forceHash = '';
       rendered = true; previewStale = false;
-      pvHint.textContent = 'Rendering…'; frame.classList.remove('hidden'); pvEmpty.hidden = true;
+      pvHint.textContent = 'Rendering…'; stage.classList.remove('hidden'); pvEmpty.hidden = true;
       const was = { action: bpForm.getAttribute('action'), target: bpForm.getAttribute('target') };
       bpForm.action = bpForm.dataset.previewRender; bpForm.target = 'bp-frame';
       bpForm.submit(); // plain submit into the iframe: nothing is saved
       bpForm.setAttribute('action', was.action); if (was.target) bpForm.target = was.target; else bpForm.removeAttribute('target');
     }
+    // From the Changes step: open the Preview step on one endpoint (#/?op=GET%20%2Ftasks, understood by the viewer).
+    function openInPreview(key) {
+      forceHash = `#/?op=${encodeURIComponent(key)}`;
+      go(1);
+      if (forceHash) { // preview was already rendered and up to date: just move the viewer
+        try { frame.contentWindow.location.hash = forceHash; } catch { /* not loaded yet */ }
+        forceHash = '';
+      }
+    }
+    // Device width: the iframe's own width is the page's viewport, so the viewer lays out exactly as it would on that screen.
+    const DEVICES = { desktop: 1440, tablet: 768, phone: 390 };
+    const pad = $('#pv-pad'), scaleNote = $('#pv-scale');
+    const store = { get: (k, d) => { try { return localStorage.getItem(k) || d; } catch { return d; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* storage unavailable */ } } };
+    let device = 'desktop';
+    // The iframe is laid out at the device's real width, then scaled down when the stage is narrower (so "Desktop" really is a desktop layout).
+    const fit = () => {
+      const w = DEVICES[device], gap = device === 'desktop' ? 0 : 24;
+      const avail = Math.max(240, stage.clientWidth - gap);
+      const scale = Math.min(1, avail / w);
+      const visible = Math.round(Math.min(Math.max(576, window.innerHeight * 0.88), 1440));
+      frame.style.width = `${w}px`; frame.style.height = `${Math.round(visible / scale)}px`;
+      frame.style.transform = scale < 1 ? `scale(${scale})` : '';
+      pad.style.width = `${Math.round(w * scale)}px`; pad.style.height = `${visible}px`;
+      stage.style.padding = gap ? '12px' : '0';
+      scaleNote.textContent = scale < 1 ? `${w}px wide, shown at ${Math.round(scale * 100)}%` : `${w}px wide`;
+    };
+    const setDevice = (d) => {
+      device = DEVICES[d] ? d : 'desktop';
+      deviceBtns.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.device === device)));
+      store.set('bp.device', device);
+      fit();
+    };
+    window.addEventListener('resize', fit);
+    if (window.ResizeObserver) new ResizeObserver(fit).observe(stage);
+    const deviceBtns = $$('[data-device]', bpForm);
+    deviceBtns.forEach((b) => b.addEventListener('click', () => setDevice(b.dataset.device)));
+    setDevice(store.get('bp.device', 'desktop'));
+    // The preview follows the page theme, including when it is toggled while the preview is open.
+    // Auto follows the page; Light / Dark pins the preview to one theme (handy for checking both) without changing the page.
+    let pvTheme = store.get('bp.pvtheme', 'auto');
+    const syncTheme = () => {
+      const dark = pvTheme === 'auto' ? document.documentElement.classList.contains('dark') : pvTheme === 'dark';
+      try { frame.contentDocument.documentElement.classList.toggle('dark', dark); } catch { /* not loaded yet */ }
+      $$('[data-pvtheme]', bpForm).forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.pvtheme === pvTheme)));
+    };
+    $$('[data-pvtheme]', bpForm).forEach((b) => b.addEventListener('click', () => { pvTheme = b.dataset.pvtheme; store.set('bp.pvtheme', pvTheme); syncTheme(); }));
+    syncTheme();
+    new MutationObserver(syncTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
     frame.addEventListener('load', () => {
+      syncTheme();
       if (rendered) syncPreview();
       try { if (frame.dataset.hash) frame.contentWindow.location.hash = frame.dataset.hash; } catch { /* ignore */ }
     });
@@ -546,24 +909,41 @@
     // ---- validation / diff round-trip ----
     const run = async () => {
       const ta = area();
-      if (!ta.value.trim()) { last = null; box.className = 'hidden'; renderBar(null); renderChanges(null); syncPreview(); return; }
+      if (!ta.value.trim()) { pending = false; last = null; box.className = 'hidden'; renderBar(null); renderChanges(null); syncPreview(); return; }
       const mine = ++seq;
       const fd = new FormData();
       fd.append('content', ta.value);
       try {
         const r = await (await fetch(bpForm.dataset.preview, { method: 'POST', body: fd, credentials: 'same-origin' })).json();
         if (mine !== seq) return;
-        last = r; previewStale = true;
+        pending = false; last = r; previewStale = true;
         if (!r.ok) { const m = mk('div', null, '✕ ' + r.error); if (r.line) m.append(goBtn(r)); tone('bad', m); }
-        else tone('ok', mk('div', 'font-medium', `✓ Valid · ${r.standard} · ${plural(r.endpointCount, 'endpoint')} in ${plural(r.folders, 'folder')}`));
+        else {
+          const ok = mk('div', null); ok.append(mk('div', 'font-medium', `✓ Valid · ${r.standard} · ${plural(r.endpointCount, 'endpoint')} in ${plural(r.folders, 'folder')}`));
+          if (r.warningCount) {
+            const d = mk('details', 'mt-1.5'); d.open = warnOpen; d.addEventListener('toggle', () => { warnOpen = d.open; });
+            d.append(mk('summary', 'cursor-pointer text-amber-800 dark:text-amber-300', `! ${plural(r.warningCount, 'suggestion')} (optional, you can still publish)`));
+            const ul = mk('ul', 'mt-1 max-h-40 space-y-1 overflow-auto text-xs');
+            r.warnings.forEach((w) => {
+              const li = mk('li', 'flex flex-wrap items-baseline gap-x-2'); li.append(mk('span', 'font-mono', `${w.method} ${w.path}`), mk('span', null, w.message));
+              if (w.line) { const b = mk('button', 'link !text-xs', `line ${w.line}`); b.type = 'button'; b.addEventListener('click', () => goToLine(w)); li.append(b); }
+              ul.append(li);
+            });
+            if (r.warningCount > r.warnings.length) ul.append(mk('li', null, `…and ${r.warningCount - r.warnings.length} more.`));
+            d.append(ul); ok.append(d);
+          }
+          tone('ok', ok);
+        }
+        area().dispatchEvent(new CustomEvent('editor:marks', { detail: r.ok ? (r.warnings || []).filter((w) => w.line).map((w) => ({ line: w.line, kind: 'warn', message: `${w.method} ${w.path}: ${w.message}` })) : (r.line ? [{ line: r.line, kind: 'error', message: r.error }] : []) }));
         renderBar(r); renderChanges(r);
         syncPreview();
-      } catch (err) { console.error(err); if (mine === seq) { box.className = 'hidden'; save.disabled = false; } }
+      } catch (err) { console.error(err); if (mine === seq) { pending = false; box.className = 'hidden'; save.disabled = false; refreshNav(); } }
     };
-    const later = () => { clearTimeout(timer); save.disabled = true; timer = setTimeout(run, 500); };
+    const later = () => { clearTimeout(timer); save.disabled = true; pending = true; reached = Math.min(reached, step); refreshNav(); timer = setTimeout(run, 500); };
     bpForm.addEventListener('input', (e) => { if (e.target === note) { note.dataset.touched = note.value ? '1' : ''; return; } later(); });
     bpForm.addEventListener('change', (e) => { if (e.target !== note) later(); });
     bpForm.addEventListener('submit', (e) => {
+      if (step !== 2) { e.preventDefault(); if (canGo()) go(step + 1); return; } // Enter in a field must not publish before the review
       const gone = last && last.ok && last.diff && last.diff.removed;
       if (gone && gone.length && !confirm(`This removes ${plural(gone.length, 'endpoint')}, which can break clients that use them.\n\nPublish anyway?`)) { e.preventDefault(); view('view-changes'); return; }
       box.className = 'hidden';
@@ -574,9 +954,9 @@
     window.addEventListener('beforeunload', (e) => { if (!leaving && area().value !== start) { e.preventDefault(); e.returnValue = ''; } });
     bpForm.addEventListener('submit', (e) => { if (!e.defaultPrevented) leaving = true; });
     document.addEventListener('keydown', (e) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') { e.preventDefault(); if (!save.disabled) bpForm.requestSubmit(save); else window.toast('Nothing to publish yet', 'info'); }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') { e.preventDefault(); if (step === 2 && !save.disabled) bpForm.requestSubmit(save); else if (step < 2 && canGo()) { go(step + 1); window.toast(step === 2 ? 'Review the changes, then publish' : 'Check the preview first', 'info'); } else window.toast('Nothing to publish yet', 'info'); }
     });
-    renderBar(null); renderChanges(null); syncPreview();
+    renderBar(null); renderChanges(null); syncPreview(); refreshNav();
     if (area().value.trim()) later();
   }
 
@@ -610,7 +990,9 @@
       data.endpoints.forEach((e, i) => {
         const k = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(e.method) ? e.method.toLowerCase() : 'other';
         const el = row(`sg-e${i}`, e.href, span(`method m-${k} !w-14 shrink-0`, e.method), span('min-w-0 flex-1 truncate font-mono text-xs', e.path), span('max-w-[40%] shrink-0 truncate text-xs text-slate-600 dark:text-slate-400', e.blueprint));
-        el.title = `${e.method} ${e.path} · ${e.blueprint}`;
+        if (e.deprecated) { el.querySelector('.font-mono').classList.add('line-through'); el.append(span('flag flag-dep shrink-0', 'deprecated')); }
+        if (e.status) el.append(span('flag flag-wip shrink-0', e.status));
+        el.title = `${e.method} ${e.path} · ${e.blueprint}${e.deprecated ? ' (deprecated)' : ''}${e.status ? ` (${e.status})` : ''}`;
         items.push(el); sList.append(el);
       });
       const all = document.createElement('a');
@@ -644,6 +1026,9 @@
     });
     document.addEventListener('click', (e) => { if (!sList.contains(e.target) && e.target !== sInput) close(); });
   }
+
+  // ---- <input data-select-all>: selects its whole value on focus (read-only fields such as a share link) ----
+  document.addEventListener('focusin', (e) => { if (e.target.matches && e.target.matches('input[data-select-all]')) e.target.select(); });
 
   // ---- copy buttons: <button data-copy="text"> ----
   document.addEventListener('click', async (e) => {

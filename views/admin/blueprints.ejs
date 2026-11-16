@@ -1,21 +1,35 @@
 <%- include('../partials/head') %>
-<div class="mb-4 flex items-center justify-between"><h1 class="text-2xl font-bold">Blueprints</h1><a class="btn" href="/manage/blueprints/new">Add blueprint</a></div>
+<div class="mb-4 flex items-center justify-between"><h1 class="text-2xl font-bold">Blueprints</h1><a class="btn" href="/manage/blueprints/new"><%- icon('plus') %>Add blueprint</a></div>
 <%- include('../partials/list-search', { placeholder: 'Search blueprints by title', filter: filter }) %>
-<div class="card overflow-x-auto !p-0">
-<% if (!blueprints.length && filter) { %><div class="empty"><p>No blueprints match “<%= filter %>”.</p></div><% } else if (!blueprints.length) { %><div class="empty"><p>No blueprints yet. Upload an OpenAPI or Swagger file to publish your first API.</p><a class="btn" href="/manage/blueprints/new">Add blueprint</a></div><% } else { %>
+<form id="bulk" hidden data-bulk-autohide method="post" action="/manage/blueprints/bulk-delete" class="mb-3 flex flex-wrap items-center gap-2" data-confirm="They will be hidden from everyone and their pending requests cancelled. You can restore them from the Trash." data-confirm-title="Move the selected blueprints to the trash?" data-confirm-action="Move to trash"><%- include('../partials/csrf') %>
+  <span class="text-sm text-slate-600 dark:text-slate-400" data-bulk-count aria-live="polite">0 selected</span>
+  <button class="btn btn-sm btn-danger" data-bulk-btn disabled><%- icon('trash') %>Move to trash</button>
+</form>
+<div class="card max-md:overflow-x-auto sticky-head !p-0">
+<% if (!blueprints.length && filter) { %><div class="empty"><p>No blueprints match “<%= filter %>”.</p></div><% } else if (!blueprints.length) { %><div class="empty"><p>No blueprints yet. Upload an OpenAPI or Swagger file to publish your first API.</p><a class="btn" href="/manage/blueprints/new"><%- icon('plus') %>Add blueprint</a></div><% } else { %>
 <table id="tbl" class="w-full text-sm">
-  <thead class="border-b border-slate-200 dark:border-slate-800"><tr><th scope="col" class="th">Title</th><th scope="col" class="th">Version</th><th scope="col" class="th">Format</th><th scope="col" class="th">Endpoints</th><th scope="col" class="th">Readers</th><th scope="col" class="th">Updated</th><th scope="col" class="th"><span class="sr-only">Actions</span></th></tr></thead>
+  <caption class="sr-only">Blueprints</caption>
+  <thead><tr><th scope="col" class="th w-10"><input type="checkbox" class="size-4 accent-brand-600" data-bulk-all aria-label="Select all blueprints on this page"></th>
+    <%- include('../partials/sort-th', { key: 'title', label: 'Title', sort: sort, query: query }) %><%- include('../partials/sort-th', { key: 'version', label: 'Version', sort: sort, query: query }) %><%- include('../partials/sort-th', { key: 'format', label: 'Format', sort: sort, query: query }) %><%- include('../partials/sort-th', { key: 'endpoints', label: 'Endpoints', sort: sort, query: query }) %><%- include('../partials/sort-th', { key: 'readers', label: 'Readers', sort: sort, query: query }) %><%- include('../partials/sort-th', { key: 'updated', label: 'Updated', sort: sort, query: query }) %><th scope="col" class="th"><span class="sr-only">Actions</span></th></tr></thead>
   <% blueprints.forEach(function (b) { %>
   <tr class="tr">
+    <td class="td"><input type="checkbox" class="size-4 accent-brand-600" name="ids" value="<%= b.id %>" form="bulk" data-bulk-row aria-label="Select <%= b.title %>"></td>
     <td class="td"><a class="link" href="/blueprints/<%= b.id %>"><span class="clip" title="<%= b.title %>"><%= b.title %></span></a></td><td class="td"><%= b.version || '—' %></td>
     <td class="td"><span class="badge badge-neutral"><%= b.format.toUpperCase() %></span></td><td class="td"><%= b.endpoint_count %></td>
     <td class="td"><a class="link" href="/manage/blueprints/<%= b.id %>/access" title="Who can read this blueprint"><%= b.reader_count %></a></td>
     <td class="td text-xs text-slate-600 dark:text-slate-400"><%= fmt(b.updated_at) %></td>
-    <td class="td"><div class="flex items-center justify-end gap-3">
-      <a class="link" href="/manage/blueprints/<%= b.id %>/access">Access</a>
-      <a class="link" href="/manage/blueprints/<%= b.id %>/versions">History</a>
-      <a class="link" href="/manage/blueprints/<%= b.id %>/edit">Edit</a>
-      <form method="post" action="/manage/blueprints/<%= b.id %>/delete" data-confirm="“<%= b.title %>”, will be hidden from everyone and its pending requests cancelled. You can restore it from the Trash." data-confirm-title="Move this blueprint to the trash?" data-confirm-action="Move to trash"><%- include('../partials/csrf') %><button class="link-danger">Delete</button></form>
+    <td class="td"><div class="flex items-center justify-end gap-0.5">
+      <a class="ibtn" href="/manage/blueprints/<%= b.id %>/access" title="Who can read it" aria-label="Who can read it: <%= b.title %>"><%- icon('key') %></a>
+      <a class="ibtn" href="/manage/blueprints/<%= b.id %>/edit" title="Edit" aria-label="Edit: <%= b.title %>"><%- icon('edit') %></a>
+      <form method="post" action="/manage/blueprints/<%= b.id %>/delete"><%- include('../partials/csrf') %><button class="ibtn ibtn-danger" title="Move to trash" aria-label="Move to trash: <%= b.title %>"><%- icon('trash') %></button></form>
+      <details class="rowmenu" data-menu>
+        <summary class="ibtn list-none [&::-webkit-details-marker]:hidden" title="More actions" aria-label="More actions: <%= b.title %>"><%- icon('more') %></summary>
+        <div class="menu">
+          <a href="/manage/blueprints/<%= b.id %>/share"><%- icon('link') %>Share links</a>
+          <a href="/blueprints/<%= b.id %>"><%- icon('file') %>Open documentation</a>
+          <a href="/manage/blueprints/<%= b.id %>/versions"><%- icon('clock') %>History</a>
+        </div>
+      </details>
     </div></td>
   </tr>
   <% }) %>

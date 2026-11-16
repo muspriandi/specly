@@ -9,12 +9,16 @@ const sessionCookie = { ...cookieBase, maxAge: SESSION_TTL_MS };
 // One-shot message shown on the next page, as a toast. `type` is 'success' (default), 'error' or 'info';
 // it travels in the cookie as a "type|" prefix.
 const FLASH_TYPES = ['success', 'error', 'info'];
-const flash = (res, msg, type = 'success') => res.cookie('flash', `${type}|${msg}`, { ...cookieBase, maxAge: FLASH_TTL_MS });
+// `undo` ({ url, body }) adds an Undo button to the toast: it POSTs `body` to the same-site /manage `url`.
+const flash = (res, msg, type = 'success', undo = null) =>
+  res.cookie('flash', `${type}|${msg}${undo ? `\t${undo.url}\t${undo.body || ''}` : ''}`, { ...cookieBase, maxAge: FLASH_TTL_MS });
 const readFlash = (raw) => {
   if (!raw) return null;
   const i = String(raw).indexOf('|');
   const type = i > 0 ? raw.slice(0, i) : '';
-  return FLASH_TYPES.includes(type) ? { type, message: raw.slice(i + 1) } : { type: 'success', message: String(raw) };
+  const [message, url, body] = (FLASH_TYPES.includes(type) ? raw.slice(i + 1) : String(raw)).split('\t');
+  const undo = url && /^\/manage\/[\w/-]+$/.test(url) ? { url, body: body || '' } : null;
+  return { type: FLASH_TYPES.includes(type) ? type : 'success', message, undo };
 };
 
 // Error pages.

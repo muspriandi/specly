@@ -1,0 +1,7 @@
+<%# locals: key, label, sort ({key, dir}), query. A sortable column header: click toggles the direction and returns to page 1. %>
+<%
+  var active = sort.key === key, next = active && sort.dir === 'asc' ? 'desc' : 'asc';
+  var p = Object.assign({}, query, { sort: key, dir: next, page: 1 }), out = [];
+  Object.keys(p).forEach(function (k) { if (p[k] !== '' && p[k] != null && !Array.isArray(p[k])) out.push(encodeURIComponent(k) + '=' + encodeURIComponent(p[k])); });
+%>
+<th scope="col" class="th" aria-sort="<%= active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none' %>"><a class="sort-link" href="?<%= out.join('&') %>"><%= label %><span class="sort-ind" aria-hidden="true"><%= active ? (sort.dir === 'asc' ? '▲' : '▼') : '↕' %></span></a></th>
