@@ -790,8 +790,31 @@
       }
       if (d.same) { changesBody.append(mk('p', 'empty', 'No changes: this is identical to the current revision, so publishing would not create a new version.')); return; }
       changesBody.append(row('Title', c && c.title, r.title), row('Version', c && (c.version ? 'v' + c.version : 'none'), r.version ? 'v' + r.version : 'none'));
+      if (d.breaking && d.breaking.length) { // what can make an existing client fail, before it is published
+        const box = mk('section', 'mt-4 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm dark:border-red-800 dark:bg-red-950');
+        box.setAttribute('role', 'alert');
+        box.append(mk('h3', 'font-semibold text-red-800 dark:text-red-300', `Breaking changes (${d.breaking.length})`),
+          mk('p', 'text-xs text-red-800/80 dark:text-red-300/80', 'Existing clients may fail. Check them, or bump the major version and tell your readers.'));
+        const ul = mk('ul', 'mt-2 space-y-1');
+        d.breaking.slice(0, 30).forEach((b) => { const li = mk('li', 'text-xs'); li.append(mk('span', 'font-mono font-semibold', b.endpoint), document.createTextNode(' — ' + b.change)); ul.append(li); });
+        if (d.breaking.length > 30) ul.append(mk('li', 'text-xs', `…and ${d.breaking.length - 30} more`));
+        box.append(ul);
+        changesBody.append(box);
+      }
       if (d.added.length) changesBody.append(group('Added', 'text-emerald-700 dark:text-emerald-400', d.added, true));
       if (d.changed.length) changesBody.append(group('Changed', 'text-amber-700 dark:text-amber-400', d.changed, true));
+      if (d.details && Object.keys(d.details).length) {
+        const det = mk('details', 'mt-3 text-sm');
+        det.append(mk('summary', 'link cursor-pointer select-none', 'What changed in each endpoint'));
+        const ul = mk('ul', 'mt-2 space-y-2');
+        Object.entries(d.details).slice(0, 50).forEach(([k, list]) => {
+          const li = mk('li'); li.append(mk('div', 'font-mono text-xs font-semibold', k));
+          const inner = mk('ul', 'ml-4 list-disc text-xs');
+          list.forEach((c) => inner.append(mk('li', c.level === 'breaking' ? 'text-red-700 dark:text-red-400' : '', c.text)));
+          li.append(inner); ul.append(li);
+        });
+        det.append(ul); changesBody.append(det);
+      }
       if (d.deprecated && d.deprecated.length) changesBody.append(group('Newly deprecated', 'text-slate-700 dark:text-slate-300', d.deprecated));
       if (d.removed.length) {
         changesBody.append(group('Removed', 'text-red-700 dark:text-red-400', d.removed));

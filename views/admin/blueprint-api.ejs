@@ -1,0 +1,59 @@
+<%- include('../partials/head') %>
+<%- include('../partials/crumbs', { items: [['Blueprints', '/manage/blueprints'], [bp.title, null]] }) %>
+<h1 class="mb-3 text-2xl font-bold">Access</h1>
+<%- include('../partials/bp-tabs', { bp: bp, active: 'api' }) %>
+<h2 class="mb-1 font-semibold">Publish from CI <span class="text-sm font-normal text-slate-600 dark:text-slate-400">so the docs follow your code</span></h2>
+<p class="mb-3 text-sm text-slate-600 dark:text-slate-400">A token can publish a new revision of <strong><%= bp.title %></strong> and nothing else: it cannot read documents or touch other blueprints. It can expire and be revoked at any time.</p>
+<% if (newToken) { %>
+<div class="mb-3 rounded-lg border border-emerald-600/40 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200" role="status">
+  <p class="font-medium">Token created. Copy it now, it is not shown again. Store it as a secret in your CI, never in the repository.</p>
+  <div class="mt-2 flex flex-wrap items-center gap-2"><input readonly value="<%= newToken %>" aria-label="API token" class="field !mt-0 min-w-0 flex-1 font-mono text-xs" data-select-all><button type="button" class="btn btn-sm" data-copy="<%= newToken %>">Copy token</button></div>
+</div>
+<% } %>
+<% var live = tokens.filter(function (t) { return t.live; }), full = live.length >= maxTokens; %>
+<div class="grid items-start gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+  <section class="min-w-0" aria-label="Existing tokens">
+    <% if (live.length) { %>
+    <form id="bulk" method="post" action="/manage/blueprints/<%= bp.id %>/api/revoke" class="mb-3 flex flex-wrap items-center gap-2" data-confirm="Pipelines using the selected tokens will stop being able to publish." data-confirm-title="Revoke the selected tokens?" data-confirm-action="Revoke"><%- include('../partials/csrf') %>
+      <span class="text-sm text-slate-600 dark:text-slate-400" data-bulk-count aria-live="polite">0 selected</span>
+      <button class="btn btn-sm btn-danger" data-bulk-btn disabled><%- icon('x') %>Revoke selected</button>
+    </form>
+    <% } %>
+    <div class="card max-md:overflow-x-auto sticky-head !p-0">
+      <% if (!tokens.length) { %><div class="empty"><%- icon('send', 'size-8') %><p>No tokens yet.</p></div><% } else { %>
+      <table class="w-full text-sm">
+        <caption class="sr-only">API tokens for <%= bp.title %></caption>
+        <thead class="border-b border-slate-200 dark:border-slate-800"><tr><th scope="col" class="th w-10"><% if (live.length > 1) { %><input type="checkbox" class="size-4 accent-brand-600" data-bulk-all aria-label="Select all active tokens"><% } %></th><th scope="col" class="th">Token</th><th scope="col" class="th">Expires</th><th scope="col" class="th">Last used</th><th scope="col" class="th">Status</th></tr></thead>
+        <% tokens.forEach(function (t) { %>
+        <tr class="tr <%= t.live ? '' : 'opacity-60' %>">
+          <td class="td"><% if (t.live) { %><input type="checkbox" class="size-4 accent-brand-600" name="ids" value="<%= t.id %>" form="bulk" data-bulk-row aria-label="Select <%= t.name %>"><% } %></td>
+          <td class="td"><div class="clip block font-medium" title="<%= t.name %>"><%= t.name %></div><div class="text-xs text-slate-600 dark:text-slate-400">by <%= t.author || '—' %> · <%= fmt(t.created_at) %></div></td>
+          <td class="td text-xs text-slate-600 dark:text-slate-400"><%= t.expires_at ? fmt(t.expires_at) : 'Never' %></td>
+          <td class="td text-xs text-slate-600 dark:text-slate-400"><%= t.last_used_at ? fmt(t.last_used_at) : '—' %></td>
+          <td class="td"><span class="badge <%= t.live ? 'badge-ok' : 'badge-neutral' %>"><%= t.revoked_at ? 'Revoked' : t.live ? 'Active' : 'Expired' %></span></td>
+        </tr>
+        <% }) %>
+      </table>
+      <% } %>
+    </div>
+  </section>
+  <form method="post" action="/manage/blueprints/<%= bp.id %>/api" class="card min-w-0"><%- include('../partials/csrf') %>
+    <h3 class="flex items-center justify-between gap-2 font-semibold">Create a token <span class="badge <%= full ? 'badge-warn' : 'badge-neutral' %>"><%= live.length %> of <%= maxTokens %> active</span></h3>
+    <% if (full) { %><p class="mt-2 text-sm text-amber-800 dark:text-amber-300" role="status">The limit is reached. Revoke a token to create another.</p><% } %>
+    <label class="label">Name<input class="field" name="name" maxlength="80" required placeholder="e.g. GitHub Actions, main branch"></label>
+    <label class="label">Valid for
+      <select class="field" name="days"><% tokenDays.forEach(function (d) { %><option value="<%= d %>" <%= d === 90 ? 'selected' : '' %>><%= d === 0 ? 'No expiry' : d + ' days' %></option><% }) %></select>
+    </label>
+    <button class="btn" <%= full ? 'disabled' : '' %>><%- icon('key') %>Create token</button>
+  </form>
+</div>
+<section class="mt-6" aria-labelledby="usage-h">
+  <h2 id="usage-h" class="mb-2 font-semibold">How to use it</h2>
+  <pre class="overflow-x-auto rounded-lg bg-slate-900 p-4 font-mono text-xs leading-5 text-slate-100">curl --fail-with-body -X PUT "<%= apiUrl %>" \
+  -H "Authorization: Bearer $SPECLY_TOKEN" \
+  -H "Content-Type: application/yaml" \
+  -H "X-Change-Note: Release $GITHUB_SHA" \
+  --data-binary @openapi.yaml</pre>
+  <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">The answer is JSON: <code>unchanged</code>, the new <code>revision</code>, how many endpoints were <code>added</code>, <code>changed</code>, <code>removed</code> or <code>deprecated</code>, and any <code>breaking</code> changes. An invalid document is refused with 400 and the line of the error, so a broken spec fails the pipeline instead of reaching readers.</p>
+</section>
+<%- include('../partials/foot') %>

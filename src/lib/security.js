@@ -75,12 +75,13 @@ function createLimiter({ max, windowMs }) {
 }
 
 // Express middleware: answer 429 once `key(req)` has made `max` requests in the window.
-function rateLimit({ max, windowMs, key = (req) => req.ip }) {
+function rateLimit({ max, windowMs, key = (req) => req.ip, json = false }) {
   const limiter = createLimiter({ max, windowMs });
   return (req, res, next) => {
     const k = key(req);
     if (limiter.isLimited(k)) {
       log.warn('security', { event: 'rate_limited', req: req.id, path: pathOf(req), ip: req.ip });
+      if (json) return res.status(429).set('Retry-After', String(Math.ceil(windowMs / 1000))).json({ ok: false, error: 'Too many requests. Slow down and retry shortly.' });
       return res.status(429).render('error', { title: 'Too many requests', message: 'Please wait a few minutes and try again.' });
     }
     limiter.hit(k);

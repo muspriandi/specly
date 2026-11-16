@@ -37,6 +37,8 @@
       <% } %>
     </td>
     <td class="td"><div class="flex items-center justify-end gap-0.5 whitespace-nowrap">
+      <a class="ibtn" href="/manage/blueprints/<%= bp.id %>/versions/<%= v.id %>" title="View this revision as documentation" aria-label="View this revision as documentation"><%- icon('book') %></a>
+      <% if (i !== 0) { %><a class="ibtn" href="/manage/blueprints/<%= bp.id %>/compare?from=<%= v.version_no %>&to=<%= versions[0].version_no %>" title="Compare with the current revision" aria-label="Compare with the current revision"><%- icon('list') %></a><% } %>
       <a class="ibtn" href="/manage/blueprints/<%= bp.id %>/versions/<%= v.id %>/source" title="Download this revision" aria-label="Download this revision"><%- icon('download') %></a>
       <% if (i !== 0) { %>
       <form method="post" action="/manage/blueprints/<%= bp.id %>/versions/<%= v.id %>/restore" data-confirm="Revision <%= v.version_no %> becomes a new current version; nothing is lost." data-confirm-title="Restore revision <%= v.version_no %>?" data-confirm-action="Restore"><%- include('../partials/csrf') %><button class="ibtn" title="Restore this revision" aria-label="Restore this revision"><%- icon('restore') %></button></form>

@@ -1,0 +1,45 @@
+<%- include('../partials/head') %>
+<%- include('../partials/crumbs', { items: [['Blueprints', '/manage/blueprints'], [bp.title, null], ['History', '/manage/blueprints/' + bp.id + '/versions'], ['Compare', null]] }) %>
+<h1 class="mb-1 text-2xl font-bold">Compare revisions</h1>
+<p class="mb-4 text-sm text-slate-600 dark:text-slate-400">What changed in <strong><%= bp.title %></strong> between two revisions, and which of those changes can break existing clients.</p>
+<form method="get" class="mb-4 flex flex-wrap items-end gap-3">
+  <label class="label !mb-0">From
+    <select name="from" class="field !mt-1 !w-auto"><% versions.forEach(function (v) { %><option value="<%= v.version_no %>" <%= v.version_no === from ? 'selected' : '' %>>Rev <%= v.version_no %><%= v.version ? ' · v' + v.version : '' %> · <%= fmt(v.created_at) %></option><% }) %></select>
+  </label>
+  <label class="label !mb-0">To
+    <select name="to" class="field !mt-1 !w-auto"><% versions.forEach(function (v) { %><option value="<%= v.version_no %>" <%= v.version_no === to ? 'selected' : '' %>>Rev <%= v.version_no %><%= v.version ? ' · v' + v.version : '' %> · <%= fmt(v.created_at) %></option><% }) %></select>
+  </label>
+  <button class="btn"><%- icon('search') %>Compare</button>
+  <a class="link" href="/manage/blueprints/<%= bp.id %>/compare?from=<%= to %>&to=<%= from %>">Swap</a>
+</form>
+<% var total = diff.added.length + diff.changed.length + diff.removed.length + diff.deprecated.length; %>
+<% if (from === to) { %><div class="card"><p class="text-sm">Pick two different revisions.</p></div>
+<% } else if (!total) { %><div class="card"><p class="text-sm">No endpoint changes between revision <%= from %> and revision <%= to %> (only descriptions or other details differ, if anything).</p></div>
+<% } else { %>
+<div class="mb-4 flex flex-wrap gap-2 text-xs font-semibold">
+  <% if (diff.breaking.length) { %><span class="badge border-red-400 bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300"><%= diff.breaking.length %> breaking</span><% } %>
+  <span class="badge badge-ok">+<%= diff.added.length %> added</span><span class="badge badge-warn">~<%= diff.changed.length %> changed</span><span class="badge badge-neutral">−<%= diff.removed.length %> removed</span>
+</div>
+<% if (diff.breaking.length) { %>
+<section class="mb-4 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm dark:border-red-800 dark:bg-red-950" role="alert">
+  <h2 class="font-semibold text-red-800 dark:text-red-300">Breaking changes (<%= diff.breaking.length %>)</h2>
+  <p class="text-xs text-red-800/80 dark:text-red-300/80">Existing clients may fail on these.</p>
+  <ul class="mt-2 space-y-1"><% diff.breaking.forEach(function (b) { %><li class="text-xs"><span class="font-mono font-semibold"><%= b.endpoint %></span> — <%= b.change %></li><% }) %></ul>
+</section>
+<% } %>
+<div class="grid gap-4 lg:grid-cols-2">
+  <% [['Added', 'text-emerald-700 dark:text-emerald-400', diff.added], ['Removed', 'text-red-700 dark:text-red-400', diff.removed], ['Newly deprecated', 'text-slate-700 dark:text-slate-300', diff.deprecated]].forEach(function (g) { if (g[2].length) { %>
+  <section class="card min-w-0"><h2 class="text-sm font-semibold <%= g[1] %>"><%= g[0] %> (<%= g[2].length %>)</h2>
+    <ul class="mt-2 space-y-0.5 font-mono text-xs"><% g[2].slice(0, 100).forEach(function (k) { %><li class="truncate" title="<%= k %>"><%= k %></li><% }) %><% if (g[2].length > 100) { %><li class="font-sans">…and <%= g[2].length - 100 %> more</li><% } %></ul></section>
+  <% } }) %>
+  <% if (diff.changed.length) { %>
+  <section class="card min-w-0 lg:col-span-2"><h2 class="text-sm font-semibold text-amber-700 dark:text-amber-400">Changed (<%= diff.changed.length %>)</h2>
+    <ul class="mt-2 space-y-3"><% diff.changed.slice(0, 100).forEach(function (k) { %>
+      <li><div class="font-mono text-xs font-semibold"><%= k %></div>
+        <% if (diff.details[k]) { %><ul class="ml-4 mt-1 list-disc text-xs"><% diff.details[k].forEach(function (c) { %><li class="<%= c.level === 'breaking' ? 'text-red-700 dark:text-red-400' : '' %>"><%= c.text %></li><% }) %></ul><% } %>
+      </li><% }) %>
+    </ul></section>
+  <% } %>
+</div>
+<% } %>
+<%- include('../partials/foot') %>

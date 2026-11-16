@@ -1,5 +1,6 @@
 const db = require('../db');
 const { parseSpec, listEndpoints } = require('./spec');
+const { compareOperation } = require('./apidiff');
 
 // Parse + store a blueprint (create when id is null) and record a revision unless the
 // content is identical to the latest one. Throws parseSpec errors (user-facing messages).
@@ -54,25 +55,37 @@ async function saveBlueprint(id, text, userId, note = null) {
   return saved;
 }
 
-// Endpoint-level diff between two sources: operations added, removed or changed.
+// Diff between two sources: operations added, removed, changed or newly deprecated, plus WHAT changed in each changed
+// operation (`details[key]` = [{ level, text }]) and the changes that can break existing clients (`breaking`, see apidiff.js).
 function diffSpecs(prevText, nextText) {
-  const ops = (text) => {
-    const out = new Map();
+  const load = (text) => {
+    const out = { spec: null, ops: new Map() };
     try {
       const { spec } = parseSpec(text);
-      for (const e of listEndpoints(spec)) out.set(`${e.method} ${e.path}`, JSON.stringify(spec.paths[e.path][e.method.toLowerCase()]));
+      out.spec = spec;
+      for (const e of listEndpoints(spec)) out.ops.set(`${e.method} ${e.path}`, JSON.stringify(spec.paths[e.path][e.method.toLowerCase()]));
     } catch { /* unparseable legacy content counts as empty */ }
     return out;
   };
-  const a = prevText == null ? new Map() : ops(prevText), b = ops(nextText);
-  const added = [], removed = [], changed = [], deprecated = [];
+  const A = prevText == null ? { spec: null, ops: new Map() } : load(prevText), B = load(nextText);
+  const a = A.ops, b = B.ops;
+  const added = [], removed = [], changed = [], deprecated = [], breaking = [], details = {};
   const flag = (m, k) => { try { return JSON.parse(m.get(k)).deprecated === true; } catch { return false; } };
   for (const [k, v] of b) {
-    if (!a.has(k)) added.push(k); else if (a.get(k) !== v) changed.push(k);
+    if (!a.has(k)) added.push(k);
+    else if (a.get(k) !== v) {
+      changed.push(k);
+      try {
+        const sp = k.indexOf(' ');
+        const list = compareOperation(A.spec, B.spec, k.slice(sp + 1), k.slice(0, sp).toLowerCase());
+        if (list.length) details[k] = list;
+        for (const c of list) if (c.level === 'breaking') breaking.push({ endpoint: k, change: c.text });
+      } catch { /* the endpoint-level result above still stands */ }
+    }
     if (flag(b, k) && !(a.has(k) && flag(a, k))) deprecated.push(k); // newly deprecated (or added already deprecated)
   }
-  for (const k of a.keys()) if (!b.has(k)) removed.push(k);
-  return { added, removed, changed, deprecated };
+  for (const k of a.keys()) if (!b.has(k)) { removed.push(k); breaking.push({ endpoint: k, change: 'Endpoint removed' }); }
+  return { added, removed, changed, deprecated, breaking, details };
 }
 
 // The raw text is not a column of blueprints: `source` resolves to the latest revision's text.

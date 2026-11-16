@@ -5,11 +5,12 @@ const { audit } = require('../../services/audit');
 const { canonical, saveBlueprint, diffSpecs, getBlueprint, describeSave, ver } = require('../../services/blueprints');
 const { parseSpec, listEndpoints } = require('../../services/spec');
 const { lintSpec } = require('../../services/lint');
-const { flash, notFound, baseUrl, cookieBase } = require('../../lib/http');
+const { flash, notFound, baseUrl, cookieBase, setOnce, takeOnce } = require('../../lib/http');
 const trash = require('../../services/trash');
 const access = require('../../services/access');
 const shares = require('../../services/shares');
-const { notifyAccessGranted } = require('../../services/notify');
+const apitokens = require('../../services/apitokens');
+const { notifyAccessGranted, notifyWatchers } = require('../../services/notify');
 const { text } = require('../../lib/validate');
 const { paginate, limitSql, likeOf, sortOf } = require('../../lib/paginate');
 
@@ -124,7 +125,10 @@ router.post('/:id', upload.single('file'), async (req, res) => {
   }
   try {
     const saved = await saveBlueprint(bp.id, sourceFrom(req), req.user.id, noteFrom(req));
-    if (!saved.unchanged) await audit(req, 'blueprint.updated', { type: 'blueprint', id: bp.id, detail: describeSave(saved) });
+    if (!saved.unchanged) {
+      await audit(req, 'blueprint.updated', { type: 'blueprint', id: bp.id, detail: describeSave(saved) });
+      notifyWatchers(req, bp.id, saved);
+    }
     flash(res, saved.unchanged ? 'No changes: the content is identical to the current revision.' : 'Blueprint updated.', saved.unchanged ? 'info' : 'success');
     res.redirect('/manage/blueprints');
   } catch (e) {
@@ -211,6 +215,38 @@ router.post('/:id/share', async (req, res) => {
   res.redirect(shareBack(req));
 });
 
+// ---- API tokens: publish this blueprint from CI (see routes/api.js). Same pattern as share links: shown once after a redirect. ----
+const apiBack = (req) => `/manage/blueprints/${req.params.id}/api`;
+
+router.get('/:id/api', async (req, res) => {
+  const bp = await getBlueprint(req.params.id, 'id,title');
+  if (!bp) return notFound(res, 'Blueprint not found.');
+  const once = takeOnce(req, res, 'newtoken', apiBack(req));
+  res.render('admin/blueprint-api', { title: `Publish API: ${bp.title}`, bp, tokens: await apitokens.listFor(bp.id), tokenDays: apitokens.DAYS, maxTokens: apitokens.MAX_ACTIVE,
+    newToken: once && /^spk_[A-Za-z0-9_-]{43}$/.test(once.token) ? once.token : null, apiUrl: `${baseUrl(req)}/api/v1/blueprints/${bp.id}` });
+});
+
+router.post('/:id/api', async (req, res) => {
+  const bp = await getBlueprint(req.params.id, 'id,title');
+  if (!bp) return notFound(res, 'Blueprint not found.');
+  const name = text(req.body.name, 80);
+  if (!name) { flash(res, 'Give the token a name, so you can tell it apart later.', 'error'); return res.redirect(apiBack(req)); }
+  const made = await apitokens.create(bp.id, name, req.body.days, req.user.id);
+  if (!made) { flash(res, `This blueprint already has ${apitokens.MAX_ACTIVE} active tokens. Revoke one to create another.`, 'error'); return res.redirect(apiBack(req)); }
+  await audit(req, 'blueprint.api_token_created', { type: 'blueprint', id: bp.id, detail: `Created the API token "${name}" for "${bp.title}", ${made.days ? `valid ${made.days} days` : 'no expiry'}` });
+  setOnce(res, 'newtoken', { token: made.token }, apiBack(req));
+  res.redirect(apiBack(req));
+});
+
+router.post('/:id/api/revoke', async (req, res) => {
+  const bp = await getBlueprint(req.params.id, 'id,title');
+  if (!bp) return notFound(res, 'Blueprint not found.');
+  const done = await apitokens.revokeMany([].concat(req.body.ids || []), bp.id);
+  if (done.length) await audit(req, 'blueprint.api_token_revoked', { type: 'blueprint', id: bp.id, detail: `Revoked the API token${done.length === 1 ? '' : 's'} ${done.map((d) => `"${d.name}"`).join(', ')} for "${bp.title}"` });
+  flash(res, done.length ? `${plural(done.length, 'token')} revoked. ${done.length === 1 ? 'It stops' : 'They stop'} working immediately.` : 'Select at least one active token first.', done.length ? 'success' : 'error');
+  res.redirect(apiBack(req));
+});
+
 // Revoke one link (/share/:sid/revoke) or several (/share/revoke with links[]).
 const revokeLinks = (pick) => async (req, res) => {
   const bp = await getBlueprint(req.params.id, 'id,title');
@@ -263,6 +299,36 @@ router.get('/:id/versions', async (req, res) => {
   res.render('admin/versions', { title: `History: ${bp.title}`, bp, versions });
 });
 
+// Look at an old revision as documentation, and compare any two revisions. Admins only (this whole tree is): an older revision
+// may hold things that were taken out on purpose, so readers get the changelog, not the old documents.
+router.get('/:id/versions/:vid', async (req, res) => {
+  const bp = await getBlueprint(req.params.id, 'id,title,version,description,format');
+  if (!bp) return notFound(res, 'Blueprint not found.');
+  const v = await db.one(`SELECT id, version_no, version, title, format FROM blueprint_versions WHERE id=$2 AND blueprint_id=$1`, [bp.id, req.params.vid]);
+  if (!v) return notFound(res, 'Revision not found.');
+  const latest = (await latestRevision(bp.id)).version_no;
+  res.render('viewer', { title: `${v.title} (revision ${v.version_no})`, bp: { ...bp, title: v.title, version: v.version, format: v.format }, scope: null, classic: req.query.view === 'swagger',
+    base: `/manage/blueprints/${bp.id}/versions/${v.id}`, shared: false, watching: null, revision: { no: v.version_no, latest, current: v.version_no === latest, blueprintId: bp.id } });
+});
+
+router.get('/:id/versions/:vid/spec.json', async (req, res) => {
+  const v = await getVersion(req);
+  if (!v) return res.status(404).json({ error: 'Not found' });
+  try { res.json(parseSpec(v.source).spec); } catch { res.status(404).json({ error: 'Not found' }); }
+});
+
+router.get('/:id/compare', async (req, res) => {
+  const bp = await getBlueprint(req.params.id, 'id,title');
+  if (!bp) return notFound(res, 'Blueprint not found.');
+  const versions = await db.query('SELECT id, version_no, version, note, created_at FROM blueprint_versions WHERE blueprint_id=$1 ORDER BY version_no DESC', [bp.id]);
+  if (!versions.length) return notFound(res, 'This blueprint has no revisions.');
+  const valid = (x, fallback) => (versions.some((v) => v.version_no === Number(x)) ? Number(x) : fallback);
+  const to = valid(req.query.to, versions[0].version_no);
+  const from = valid(req.query.from, (versions[1] || versions[0]).version_no);
+  const src = new Map((await db.query('SELECT version_no, source FROM blueprint_versions WHERE blueprint_id=$1 AND version_no = ANY($2)', [bp.id, [from, to]])).map((r) => [r.version_no, r.source]));
+  res.render('admin/compare', { title: `Compare revisions: ${bp.title}`, bp, versions, from, to, diff: diffSpecs(src.get(from), src.get(to)) });
+});
+
 router.get('/:id/versions/:vid/source', async (req, res) => {
   const v = await getVersion(req);
   if (!v) return notFound(res, 'Version not found.');
@@ -275,6 +341,7 @@ router.post('/:id/versions/:vid/restore', async (req, res) => {
   const v = await getVersion(req);
   if (!v) return notFound(res, 'Version not found.');
   const saved = await saveBlueprint(Number(req.params.id), v.source, req.user.id, `Restored from revision ${v.version_no}`);
+  if (!saved.unchanged) notifyWatchers(req, Number(req.params.id), saved);
   await audit(req, 'blueprint.restored', { type: 'blueprint', id: req.params.id,
     detail: describeSave(saved, { restoredFrom: { revision: v.version_no, version: saved.version } }) });
   flash(res, `Restored revision ${v.version_no} as the current one.`);

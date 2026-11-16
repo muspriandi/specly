@@ -1,5 +1,6 @@
-<%# locals: bp, active ('access' | 'share'). Switches between the two settings pages of one blueprint. %>
+<%# locals: bp, active ('access' | 'share' | 'api'). Switches between the settings pages of one blueprint. %>
 <nav aria-label="Blueprint settings" class="mb-4 flex gap-1 overflow-x-auto border-b border-slate-200 dark:border-slate-800">
   <a class="subnav-link" href="/manage/blueprints/<%= bp.id %>/access" <%- active === 'access' ? 'aria-current="page"' : '' %>><%- icon('key') %>Who can read</a>
   <a class="subnav-link" href="/manage/blueprints/<%= bp.id %>/share" <%- active === 'share' ? 'aria-current="page"' : '' %>><%- icon('link') %>Share links</a>
+  <a class="subnav-link" href="/manage/blueprints/<%= bp.id %>/api" <%- active === 'api' ? 'aria-current="page"' : '' %>><%- icon('send') %>Publish API</a>
 </nav>

@@ -18,7 +18,8 @@ function readerRouter(resolve, { shared = false } = {}) {
     const ctx = await resolve(req, res, 'page');
     if (!ctx) return;
     const bp = await getBlueprint(ctx.id);
-    res.render('viewer', { title: bp.title, bp, scope: shared ? null : { id: bp.id, title: bp.title }, classic: req.query.view === 'swagger', base: ctx.base, shared });
+    const watching = !shared && req.user ? !!(await db.one('SELECT 1 FROM blueprint_watchers WHERE user_id=$1 AND blueprint_id=$2', [req.user.id, bp.id])) : null;
+    res.render('viewer', { title: bp.title, bp, scope: shared ? null : { id: bp.id, title: bp.title }, classic: req.query.view === 'swagger', base: ctx.base, shared, watching });
   });
 
   r.get('/spec.json', async (req, res) => {

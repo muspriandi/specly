@@ -13,7 +13,7 @@ const STORED = new Set([
   'user.created', 'user.updated', 'user.deleted', 'user.restored', 'user.purged', 'user.2fa_reset', 'user.access_changed',
   'invite.accepted',
   // access to blueprints
-  'blueprint.access_changed', 'blueprint.share_created', 'blueprint.share_revoked',
+  'blueprint.access_changed', 'blueprint.share_created', 'blueprint.share_revoked', 'blueprint.api_token_created', 'blueprint.api_token_revoked',
   'request.approved', 'request.rejected', 'request.revoked',
   // destructive or reverting content actions
   'blueprint.deleted', 'blueprint.restored', 'blueprint.purged',

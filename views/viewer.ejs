@@ -2,21 +2,32 @@
 <div class="mb-3 flex flex-wrap items-center gap-3">
   <nav aria-label="Breadcrumb" class="flex min-w-0 flex-1 basis-64 items-center gap-2 text-sm"><% if (!shared) { %><a class="link shrink-0" href="/">All blueprints</a><span class="text-slate-400" aria-hidden="true">/</span><% } %><span class="min-w-0 truncate font-medium" title="<%= bp.title %>"><%= bp.title %></span><% if (shared) { %><span class="badge badge-neutral shrink-0" title="You are viewing this through a share link">Shared, read-only</span><% } %></nav>
   <% if (bp.version) { %><span class="badge badge-neutral shrink-0">v<%= bp.version %></span><% } %>
-  <div class="ml-auto flex shrink-0 items-center gap-3">
+  <div class="ml-auto flex flex-wrap items-center justify-end gap-3">
     <div class="inline-flex overflow-hidden rounded-lg border border-slate-300 text-xs font-medium dark:border-slate-700" role="group" aria-label="Viewer">
       <a class="px-3 py-1.5 <%= classic ? 'hover:bg-slate-100 dark:hover:bg-slate-800' : 'bg-brand-600 text-white' %>" href="<%= base %>" <%- classic ? '' : 'aria-current="page"' %>>Collection</a>
       <a class="px-3 py-1.5 <%= classic ? 'bg-brand-600 text-white' : 'hover:bg-slate-100 dark:hover:bg-slate-800' %>" href="<%= base %>?view=swagger" <%- classic ? 'aria-current="page"' : '' %>>Swagger UI</a>
     </div>
-    <a class="btn btn-sm btn-ghost" href="<%= base %>/changelog">Changelog</a>
+    <% if (watching !== null && typeof watching !== 'undefined' && !(typeof revision !== 'undefined' && revision)) { %>
+    <form method="post" action="/blueprints/<%= bp.id %>/<%= watching ? 'unwatch' : 'watch' %>"><%- include('partials/csrf') %>
+      <button class="btn btn-sm btn-ghost" title="<%= watching ? 'You are emailed when this blueprint is published. Click to stop.' : 'Get an email when this blueprint is published' %>" aria-pressed="<%= watching ? 'true' : 'false' %>"><%- icon('mail') %><%= watching ? 'Watching' : 'Watch' %></button>
+    </form>
+    <% } %>
+    <% if (!(typeof revision !== 'undefined' && revision)) { %><a class="btn btn-sm btn-ghost" href="<%= base %>/changelog">Changelog</a><% } %>
     <details class="relative" data-menu>
       <summary class="btn btn-sm btn-ghost list-none [&::-webkit-details-marker]:hidden" aria-label="Download options">Download <%- icon('chevron', 'size-3.5') %></summary>
       <div class="menu">
         <a href="<%= base %>/source">Original <%= bp.format.toUpperCase() %> file</a>
-        <a href="<%= base %>/postman.json">Postman collection</a>
+        <% if (!(typeof revision !== 'undefined' && revision)) { %><a href="<%= base %>/postman.json">Postman collection</a><% } %>
       </div>
     </details>
   </div>
 </div>
+<% if (typeof revision !== 'undefined' && revision) { %>
+<div class="mb-3 rounded-lg border border-amber-500/50 bg-amber-50 px-4 py-2.5 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-200" role="status">
+  <strong>Revision <%= revision.no %></strong> <%= revision.current ? '(the current one)' : 'of ' + revision.latest + ': not the current version' %>. Only admins can see old revisions.
+  <a class="link" href="/manage/blueprints/<%= revision.blueprintId %>/versions">All revisions</a><% if (!revision.current) { %> · <a class="link" href="/blueprints/<%= revision.blueprintId %>">View the current version</a> · <a class="link" href="/manage/blueprints/<%= revision.blueprintId %>/compare?from=<%= revision.no %>&to=<%= revision.latest %>">Compare with current</a><% } %>
+</div>
+<% } %>
 <% if (classic) { %>
 <div id="swagger" data-spec="<%= base %>/spec.json" class="rounded-xl bg-white py-2 text-slate-900"></div>
 <script src="/static/swagger/swagger-ui-bundle.js"></script>

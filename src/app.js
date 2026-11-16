@@ -58,6 +58,7 @@ function createApp() {
     } catch { /* the badge is cosmetic */ }
     next();
   });
+  app.use('/api/v1', require('./routes/api')); // token-authenticated, no cookies: mounted before the CSRF check on purpose
   app.use(csrf); // after the locals so its 403 page can render the layout
 
   // Share links: read one blueprint without an account. GET only, throttled per IP, nothing is ever written.
