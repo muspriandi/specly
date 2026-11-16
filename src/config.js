@@ -11,6 +11,9 @@ const config = Object.freeze({
   baseUrl,
   databaseUrl: env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/specly',
   trustProxy: env.TRUST_PROXY === 'true',
+  sessionIdleHours: env.SESSION_IDLE_HOURS === undefined || env.SESSION_IDLE_HOURS === '' ? 24 : Math.max(0, Number(env.SESSION_IDLE_HOURS)), // 0 = no idle timeout
+  appSecret: env.APP_SECRET || null, // encrypts two-factor secrets at rest (required in production): openssl rand -base64 32
+  bcryptCost: Math.min(15, Math.max(4, Number(env.BCRYPT_COST || 12))),
   autoMigrate: env.AUTO_MIGRATE !== 'false', // apply pending migrations on start (false: refuse to start until `npm run migrate`)
   autoSeed: env.AUTO_SEED !== 'false',       // on the very first start (no users yet) create the admin and a sample blueprint
   loginRateMax: Number(env.LOGIN_RATE_MAX || 30), // sign-in attempts per IP per 15 minutes
@@ -42,6 +45,8 @@ const config = Object.freeze({
   },
 });
 
+if (env.APP_SECRET && env.APP_SECRET.length < 32) throw new Error('APP_SECRET must be at least 32 characters (openssl rand -base64 32).');
+
 // Production refuses to start on settings that are only safe on a developer laptop.
 if (isProd) {
   const problems = [];
@@ -49,6 +54,10 @@ if (isProd) {
   if (!env.DATABASE_URL) problems.push('DATABASE_URL is required (the localhost default is for development).');
   if (!env.SMTP_HOST && env.ALLOW_CONSOLE_MAIL !== 'true') {
     problems.push('SMTP_HOST is required: without it emails (including password reset links) are printed to the log. Set ALLOW_CONSOLE_MAIL=true only for a demo.');
+  }
+  if (!env.APP_SECRET) problems.push('APP_SECRET is required (it encrypts two-factor secrets in the database). Generate one: openssl rand -base64 32');
+  if (env.ADMIN_PASSWORD && (env.ADMIN_PASSWORD.length < 12 || /^(newpass123|admin1234|changeme|password)/i.test(env.ADMIN_PASSWORD))) {
+    problems.push('ADMIN_PASSWORD is too weak or a well-known example (use at least 12 characters, or leave it empty to get a generated one).');
   }
   if (problems.length) throw new Error(`Cannot start in production:\n - ${problems.join('\n - ')}`);
 }

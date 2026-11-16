@@ -1,5 +1,5 @@
 /* global document, innerWidth -- used inside page.evaluate(), which runs in the browser */// Smoke test in a real browser (headless Chrome). It guards the things jsdom cannot see: layout, sizes and the
-// publish wizard's Preview step. Skipped automatically when Chrome or puppeteer-core is not available
+// publish wizard's Preview step. Skipped automatically when Chrome or playwright-core is not available
 // (set CHROME_PATH to point at a Chrome/Chromium binary).
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
@@ -8,21 +8,20 @@ const { db, url } = require('./support');
 
 const CHROME = [process.env.CHROME_PATH, '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   '/usr/bin/google-chrome', '/usr/bin/google-chrome-stable', '/usr/bin/chromium', '/usr/bin/chromium-browser'].filter(Boolean).find((p) => fs.existsSync(p));
-let puppeteer = null;
-try { puppeteer = require('puppeteer-core'); } catch { /* optional dev dependency */ }
-const skip = !CHROME || !puppeteer ? 'Chrome or puppeteer-core not available (set CHROME_PATH)' : false;
+let chromium = null;
+try { ({ chromium } = require('playwright-core')); } catch { /* optional dev dependency */ }
+const skip = !CHROME || !chromium ? 'Chrome or playwright-core not available (set CHROME_PATH)' : false;
 
 test('browser: editor layout, no stray scrollbars, and the Preview step renders the draft', { skip }, async () => {
-  const browser = await puppeteer.launch({ executablePath: CHROME, headless: true, args: ['--no-sandbox', '--disable-gpu'] });
+  const browser = await chromium.launch({ executablePath: CHROME, headless: true, args: ['--no-sandbox', '--disable-gpu'] });
   try {
-    const page = await browser.newPage();
-    await page.setViewport({ width: 1300, height: 900 });
+    const page = await (await browser.newContext({ viewport: { width: 1300, height: 900 } })).newPage();
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
 
     await page.goto(url('/login'));
-    await page.type('input[name=email]', 'admin@specly.local');
-    await page.type('input[name=password]', 'Admin1234');
+    await page.fill('input[name=email]', 'admin@specly.local');
+    await page.fill('input[name=password]', 'Admin1234');
     await Promise.all([page.waitForNavigation(), page.click('form[action="/login"] button.btn')]);
 
     // The sample blueprint is long: the editor must keep a fixed height instead of stretching to the file length.
@@ -47,7 +46,7 @@ test('browser: editor layout, no stray scrollbars, and the Preview step renders 
       ta.value = ta.value.replace(/\npaths:\n/, '\npaths:\n  /smoke-test:\n    get:\n      summary: Smoke test endpoint\n      responses:\n        "200": { description: ok }\n');
       ta.dispatchEvent(new Event('input', { bubbles: true }));
     });
-    await page.waitForFunction(() => { const n = document.querySelector('[data-next]'); return n && !n.disabled; }, { timeout: 10000 });
+    await page.waitForFunction(() => { const n = document.querySelector('[data-next]'); return n && !n.disabled; }, undefined, { timeout: 10000 });
     await page.click('[data-next]');
     const frameHandle = await page.waitForSelector('#bp-frame');
     const frame = await frameHandle.contentFrame();

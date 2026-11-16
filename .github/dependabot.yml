@@ -1,0 +1,16 @@
+# Weekly pull requests for outdated or vulnerable dependencies (security updates are opened as soon as an advisory exists).
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 10
+    groups:
+      dev-tooling:
+        dependency-type: development
+  - package-ecosystem: docker
+    directory: /
+    schedule: { interval: weekly }
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }
