@@ -18,7 +18,7 @@ const { normEmail, passwordError } = require('../src/lib/validate');
   await db.tx(async (q) => {
     const [user] = await q('SELECT id FROM users WHERE lower(email)=$1 AND deleted_at IS NULL', [email]);
     if (user) {
-      await q(`UPDATE users SET password_hash=$1, role='admin', active=TRUE WHERE id=$2`, [hash, user.id]);
+      await q(`UPDATE users SET password_hash=$1, role='admin', active=TRUE, totp_secret=NULL, totp_enabled_at=NULL, totp_last_step=NULL, recovery_codes=NULL WHERE id=$2`, [hash, user.id]);
       await auth.endAllSessions(user.id, q);
     } else {
       await q(`INSERT INTO users (email,name,password_hash,role) VALUES ($1,'Administrator',$2,'admin')`, [email, hash]);

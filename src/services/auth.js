@@ -16,10 +16,10 @@ const DUMMY_HASH = bcrypt.hashSync('timing-equalizer', 10);
 const checkPassword = (pw, hash) => bcrypt.compare(String(pw), hash || DUMMY_HASH).then((ok) => ok && !!hash);
 
 // ---- sessions ----
-async function startSession(res, userId) {
+async function startSession(res, userId, req = null) {
   const token = newToken();
-  await db.query('INSERT INTO sessions (token_hash, user_id, expires_at) VALUES ($1,$2,$3)',
-    [sha(token), userId, new Date(Date.now() + SESSION_TTL_MS)]);
+  await db.query('INSERT INTO sessions (token_hash, user_id, expires_at, ip, user_agent) VALUES ($1,$2,$3,$4,$5)',
+    [sha(token), userId, new Date(Date.now() + SESSION_TTL_MS), req ? req.ip || null : null, req ? String(req.get('user-agent') || '').slice(0, 300) || null : null]);
   res.cookie('sid', token, sessionCookie);
 }
 const endSession = (token) => db.query('DELETE FROM sessions WHERE token_hash=$1', [sha(token)]);
@@ -72,6 +72,6 @@ const requireToken = (type, title, message) => async (req, res, next) => {
 const loginFailures = createLimiter({ max: 10, windowMs: 15 * 60 * 1000 });
 
 module.exports = {
-  hashPassword, checkPassword, passwordError, startSession, endSession, endAllSessions, loadUser,
+  hashPassword, checkPassword, passwordError, sha, startSession, endSession, endAllSessions, loadUser,
   requireLogin, requireAdmin, issueToken, findToken, consumeToken, requireToken, loginFailures,
 };

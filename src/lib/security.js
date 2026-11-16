@@ -48,6 +48,9 @@ function csrf(req, res, next) {
 }
 
 // ---- Rate limiting (in memory, fixed window) ----
+// Keys can come from anonymous visitors (e.g. an email typed into the login form), so the table is capped:
+// when it is full the oldest entries are dropped instead of growing without bound.
+const MAX_KEYS = 50000;
 function createLimiter({ max, windowMs }) {
   const hits = new Map();
   setInterval(() => { // drop expired windows
@@ -59,10 +62,13 @@ function createLimiter({ max, windowMs }) {
       const h = hits.get(key);
       return !!h && h.until > Date.now() && h.count >= max;
     },
+    // Counts one attempt and returns how many there have been in the current window.
     hit(key) {
       const h = hits.get(key);
-      if (!h || h.until < Date.now()) hits.set(key, { count: 1, until: Date.now() + windowMs });
-      else h.count++;
+      if (h && h.until >= Date.now()) return ++h.count;
+      while (hits.size >= MAX_KEYS) hits.delete(hits.keys().next().value);
+      hits.set(key, { count: 1, until: Date.now() + windowMs });
+      return 1;
     },
     reset: (key) => hits.delete(key),
   };

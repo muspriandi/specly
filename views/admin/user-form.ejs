@@ -1,5 +1,6 @@
 <%- include('../partials/head') %>
-<div class="card mx-auto mt-4 max-w-md">
+<div class="mx-auto mt-4 max-w-md"><%- include('../partials/crumbs', { items: [['Users', '/manage/users'], [isNew ? 'New user' : (u && u.name) || 'Edit user', null]] }) %></div>
+<div class="card mx-auto max-w-md">
   <h1 class="mb-4 text-xl font-bold"><%= isNew ? 'New user' : 'Edit user' %></h1>
   <% if (typeof error !== 'undefined') { %><div class="alert-error"><%= error %></div><% } %>
   <form method="post" action="<%= isNew ? '/manage/users' : '/manage/users/' + u.id %>"><%- include('../partials/csrf') %>
@@ -11,7 +12,13 @@
     <label class="label">Password <%= isNew ? '' : '(leave blank to keep)' %>
       <input class="field" type="password" name="password" minlength="8" <%= isNew ? 'required' : '' %> autocomplete="new-password"></label>
     <% if (!isNew) { %><label class="label flex items-center gap-2"><input type="checkbox" name="active" class="size-4 accent-brand-600" <%= u.active ? 'checked' : '' %>> Active</label><% } %>
-    <div class="flex items-center gap-4"><button class="btn">Save</button><a class="link" href="/manage/users">Cancel</a></div>
+    <div class="flex items-center gap-4"><button class="btn"><%- icon('check') %>Save</button><a class="btn btn-text" href="/manage/users">Cancel</a></div>
   </form>
+  <% if (!isNew && u.has_2fa) { %>
+  <form method="post" action="/manage/users/<%= u.id %>/2fa-reset" class="mt-5 border-t border-slate-200 pt-4 dark:border-slate-700" data-confirm="<%= u.name %> will be signed out everywhere and can sign in with just a password until they set two-factor up again." data-confirm-title="Turn off two-factor sign-in?" data-confirm-action="Turn off"><%- include('../partials/csrf') %>
+    <p class="text-sm text-slate-600 dark:text-slate-400">Two-factor sign-in is <strong>on</strong> for this account. If they lost their phone and recovery codes, you can turn it off.</p>
+    <button class="btn btn-ghost mt-2">Turn off two-factor</button>
+  </form>
+  <% } %>
 </div>
 <%- include('../partials/foot') %>

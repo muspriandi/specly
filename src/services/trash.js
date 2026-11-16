@@ -1,4 +1,5 @@
 const db = require('../db');
+const { isLastActiveAdmin } = require('./admins');
 
 // Soft delete: rows stay (with their history) but are hidden everywhere. Related data is updated in the same
 // transaction so nothing is left pointing at something that no longer appears:
@@ -24,6 +25,7 @@ async function restoreBlueprint(id) {
 
 async function deleteUser(id, actorId) {
   return db.tx(async (q) => {
+    if (await isLastActiveAdmin(q, id)) return { lastAdmin: true };
     const [u] = await q(`UPDATE users SET deleted_at=now() WHERE id=$1 AND deleted_at IS NULL RETURNING id, email, name, role`, [id]);
     if (!u) return null;
     const sessions = await q('DELETE FROM sessions WHERE user_id=$1 RETURNING 1', [id]);

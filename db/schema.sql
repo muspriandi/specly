@@ -16,6 +16,11 @@ CREATE TABLE IF NOT EXISTS sessions (
   expires_at TIMESTAMPTZ NOT NULL
 );
 
+-- Where and when each session started, so people can see and end their own devices (account menu > Active sessions).
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS ip TEXT;
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS user_agent TEXT;
+
 -- One-time tokens for guest invitations and password resets.
 CREATE TABLE IF NOT EXISTS tokens (
   token_hash TEXT PRIMARY KEY,

@@ -10,7 +10,7 @@ const { isLastActiveAdmin, LastAdminError } = require('../../services/admins');
 const { notifyAccessGranted } = require('../../services/notify');
 const { ROLES, normEmail, isEmail, text, passwordError, firstError } = require('../../lib/validate');
 
-const getUser = (id) => db.one('SELECT id,email,name,role,active FROM users WHERE id=$1 AND deleted_at IS NULL', [id]);
+const getUser = (id) => db.one('SELECT id,email,name,role,active,(totp_enabled_at IS NOT NULL) AS has_2fa FROM users WHERE id=$1 AND deleted_at IS NULL', [id]);
 const renderForm = (res, status, u, isNew, error) =>
   res.status(status).render('admin/user-form', { title: isNew ? 'New user' : 'Edit user', u, roles: ROLES, isNew, error });
 
@@ -131,11 +131,17 @@ router.post('/:id', async (req, res) => {
   );
   if (err) return fail(err);
 
-  await db.tx(async (q) => {
+  try {
+    await db.tx(async (q) => {
+    if (u.role === 'admin' && u.active && (role !== 'admin' || !active) && await isLastActiveAdmin(q, u.id)) throw new LastAdminError();
     await q('UPDATE users SET name=$1, role=$2, active=$3 WHERE id=$4', [name, role, active, u.id]);
     if (password) await q('UPDATE users SET password_hash=$1 WHERE id=$2', [await auth.hashPassword(password), u.id]);
     if (!active || password) await auth.endAllSessions(u.id, q);
-  });
+    });
+  } catch (e) {
+    if (e instanceof LastAdminError) return fail(e.message);
+    throw e;
+  }
   const changes = [];
   if (u.role !== role) changes.push(`role changed from ${u.role} to ${role}`);
   if (u.active !== active) changes.push(active ? 'account enabled' : 'account disabled (sessions ended)');
@@ -146,11 +152,30 @@ router.post('/:id', async (req, res) => {
   res.redirect('/manage/users');
 });
 
+// Lost phone: an admin can switch someone's two-factor sign-in off (their sessions end; they can set it up again).
+router.post('/:id/2fa-reset', async (req, res) => {
+  const u = await getUser(req.params.id);
+  if (!u) return notFound(res, 'User not found.');
+  if (u.has_2fa) {
+    await db.tx(async (q) => {
+      await q('UPDATE users SET totp_secret=NULL, totp_enabled_at=NULL, totp_last_step=NULL, recovery_codes=NULL WHERE id=$1', [u.id]);
+      await auth.endAllSessions(u.id, q);
+    });
+    await audit(req, 'user.2fa_reset', { type: 'user', id: u.id, detail: `Turned off two-factor sign-in for ${u.email} (sessions ended)` });
+  }
+  flash(res, u.has_2fa ? `Two-factor sign-in turned off for ${u.name}.` : 'Two-factor sign-in was not on.', u.has_2fa ? 'success' : 'info');
+  res.redirect(`/manage/users/${u.id}/edit`);
+});
+
 router.post('/:id/delete', async (req, res) => {
   if (Number(req.params.id) === req.user.id) {
     flash(res, 'You cannot delete yourself.', 'error');
   } else {
     const u = await trash.deleteUser(req.params.id, req.user.id);
+    if (u && u.lastAdmin) {
+      flash(res, 'You cannot delete the last active admin.', 'error');
+      return res.redirect('/manage/users');
+    }
     if (u) {
       const extra = [u.endedSessions && `${u.endedSessions} session${u.endedSessions === 1 ? '' : 's'} ended`,
         u.cancelledRequests && `${u.cancelledRequests} pending request${u.cancelledRequests === 1 ? '' : 's'} cancelled`].filter(Boolean).join(', ');
