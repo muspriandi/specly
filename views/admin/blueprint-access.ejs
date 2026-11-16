@@ -22,7 +22,7 @@
         <% readers.forEach(function (r) { %>
         <tr class="tr <%= r.active ? '' : 'opacity-60' %>">
           <td class="td"><input type="checkbox" class="size-4 accent-brand-600" name="users" value="<%= r.id %>" form="bulk" data-bulk-row aria-label="Select <%= r.name %>"></td>
-          <td class="td"><div class="clip font-medium" title="<%= r.name %>"><%= r.name %></div><div class="clip text-xs text-slate-600 dark:text-slate-400" title="<%= r.email %>"><%= r.email %></div></td>
+          <td class="td"><div class="clip block font-medium" title="<%= r.name %>"><%= r.name %></div><div class="clip block text-xs text-slate-600 dark:text-slate-400" title="<%= r.email %>"><%= r.email %></div></td>
           <td class="td"><span class="badge <%= r.role === 'member' ? 'badge-ok' : 'badge-neutral' %>"><%= r.role %></span><% if (!r.active) { %> <span class="badge badge-bad">Disabled</span><% } %></td>
           <td class="td text-xs text-slate-600 dark:text-slate-400"><%= r.decided_at ? fmt(r.decided_at) : '—' %></td>
           <td class="td"><form method="post" action="/manage/blueprints/<%= bp.id %>/access/<%= r.id %>/revoke" class="text-right"><%- include('../partials/csrf') %><button class="ibtn ibtn-danger" title="Un-assign" aria-label="Un-assign: <%= r.name %>"><%- icon('x') %></button></form></td>
